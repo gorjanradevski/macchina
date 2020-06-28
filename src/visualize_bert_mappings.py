@@ -34,8 +34,6 @@ def visualize_mappings(
     organ_indices = list(set(organ_indices))
     organs = [ind2organ[str(organ_index)] for organ_index in organ_indices]
 
-    organ2ind = dict(zip(ind2organ.values(), ind2organ.keys()))
-
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
 
