@@ -32,7 +32,7 @@ def visualize_mappings(
     organ_indices = [sample["organ_indices"] for sample in samples]
     organ_indices = [item for sublist in organ_indices for item in sublist]
     organ_indices = list(set(organ_indices))
-    organs = [ind2organ[organ_index] for organ_index in organ_indices]
+    organs = [ind2organ[str(organ_index)] for organ_index in organ_indices]
 
     organ2ind = dict(zip(ind2organ.values(), ind2organ.keys()))
 
@@ -50,7 +50,7 @@ def visualize_mappings(
         sentence = sample["text"]
         color = colors[list(colors.keys())[np.array(sample["organ_indices"]).sum()]]
         label = ", ".join(
-            [ind2organ[organ_ind] for organ_ind in sample["organ_indices"]]
+            [ind2organ[str(organ_ind)] for organ_ind in sample["organ_indices"]]
         )
         if label not in organ_coords_dict:
             organ_coords_dict[label] = []
@@ -69,21 +69,21 @@ def visualize_mappings(
             label=label,
         )
 
-    for label, coordinates in organ_coords_dict.items():
-        organs = label.split(", ")
-        organ_indices = [organ2ind[organ] for organ in organs]
-        color = colors[list(colors.keys())[np.array(organ_indices).sum()]]
-        coordinates = np.array(coordinates).mean(axis=0)
-        ax.scatter(
-            coordinates[:, 0],
-            coordinates[:, 1],
-            coordinates[:, 2],
-            c=color,
-            s=100,
-            marker="*",
-            edgecolor="r",
-            label=label + " average",
-        )
+    # for label, coordinates in organ_coords_dict.items():
+    #     organs = label.split(", ")
+    #     organ_indices = [organ2ind[organ] for organ in organs]
+    #     color = colors[list(colors.keys())[np.array(organ_indices).sum()]]
+    #     coordinates = np.array(coordinates).mean(axis=0)
+    #     ax.scatter(
+    #         coordinates[:, 0],
+    #         coordinates[:, 1],
+    #         coordinates[:, 2],
+    #         c=color,
+    #         s=100,
+    #         marker="*",
+    #         edgecolor="r",
+    #         label=label + " average",
+    #     )
 
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
