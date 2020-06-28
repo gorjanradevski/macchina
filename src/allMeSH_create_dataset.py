@@ -2,6 +2,8 @@ import argparse
 import json
 import os
 import random
+import logging
+from typing import Dict
 
 import ndjson
 import seaborn as sns  # noqa: F401
@@ -11,6 +13,150 @@ from tqdm import tqdm
 from transformers import BertTokenizer
 
 from utils.text import detect_occurrences, count_occurrences
+
+logging.getLogger("transformers.tokenization_utils").setLevel(logging.ERROR)
+
+
+def fix_keyword_detection_issues(dset: str, organ2ind: Dict):
+
+    # # SOLVE CARDIA PROBLEM
+
+    for ind, abstract in tqdm(enumerate(dset)):
+        keywords = abstract["keywords"]
+        occ_organ_indices = abstract["occ_organ_indices"]
+        occ_organ_names = abstract["occ_organ_names"]
+        organ_names = abstract["organ_names"]
+        if (
+            "cardiac" in keywords
+            and "stomach" in occ_organ_names
+            and any(
+                [
+                    item in organ_names
+                    for item in ["atrium", "ventricle", "myocardium", "pericardium"]
+                ]
+            )
+        ):
+            occ_organ_indices.remove(organ2ind["stomach"])
+            occ_organ_names.remove("stomach")
+        if (
+            "cardia" in keywords
+            and "myocardium" in occ_organ_names
+            and any([item in organ_names for item in ["stomach"]])
+        ):
+            occ_organ_indices.remove(organ2ind["myocardium"])
+            occ_organ_names.remove("myocardium")
+        abstract["occ_organ_indices"] = occ_organ_indices
+        abstract["occ_organ_names"] = occ_organ_names
+
+    inds = []
+    for ind, abstract in tqdm(enumerate(dset)):
+        keywords = abstract["keywords"]
+        occ_organ_indices = abstract["occ_organ_indices"]
+        occ_organ_names = abstract["occ_organ_names"]
+        organ_names = abstract["organ_names"]
+        if "cardiac" in keywords and "stomach" in occ_organ_names:
+            inds.append(ind)
+
+    # # SOLVE THE LIVER - DELIVER PROBLEM
+
+    for ind, abstract in tqdm(enumerate(dset)):
+        keywords = abstract["keywords"]
+        occ_organ_indices = abstract["occ_organ_indices"]
+        occ_organ_names = abstract["occ_organ_names"]
+        organ_names = abstract["organ_names"]
+        if (
+            any(
+                [
+                    keyword in keywords
+                    for keyword in ["delivery", "delivered", "deliver", "delivering"]
+                ]
+            )
+            and "liver" not in organ_names
+        ):
+            occ_organ_indices.remove(organ2ind["liver"])
+            occ_organ_names.remove("liver")
+        keywords = [
+            keyword
+            for keyword in keywords
+            if keyword not in ["delivery", "delivered", "deliver", "delivering"]
+        ]
+        abstract["occ_organ_indices"] = occ_organ_indices
+        abstract["occ_organ_names"] = occ_organ_names
+        abstract["keywords"] = keywords
+
+    # # SOLVE THE COLON - COLONISE PROBLEM
+
+    inds = []
+    for ind, abstract in tqdm(enumerate(dset)):
+        keywords = abstract["keywords"]
+        occ_organ_indices = abstract["occ_organ_indices"]
+        occ_organ_names = abstract["occ_organ_names"]
+        organ_names = abstract["organ_names"]
+        if (
+            any(
+                [
+                    keyword in keywords
+                    for keyword in [
+                        "colonize",
+                        "colonise",
+                        "colonized",
+                        "colonised",
+                        "colonies",
+                    ]
+                ]
+            )
+            and "colon" not in organ_names
+        ):
+            occ_organ_indices.remove(organ2ind["colon"])
+            occ_organ_names.remove("colon")
+        keywords = [
+            keyword
+            for keyword in keywords
+            if keyword
+            not in ["colonize", "colonise", "colonized", "colonised", "colonies"]
+        ]
+        abstract["occ_organ_indices"] = occ_organ_indices
+        abstract["occ_organ_names"] = occ_organ_names
+        abstract["keywords"] = keywords
+
+    # # SOLVE THE BLADDER - GALLBLADDER PROBLEM
+
+    """Gallbladder doesn't cause the bladder keyword"""
+    """Bladder does cause problems"""
+
+    for ind, abstract in tqdm(enumerate(dset)):
+        keywords = abstract["keywords"]
+        occ_organ_indices = abstract["occ_organ_indices"]
+        occ_organ_names = abstract["occ_organ_names"]
+        organ_names = abstract["organ_names"]
+        if (
+            any([keyword in keywords for keyword in ["bladder", "bladders"]])
+            and any(
+                [
+                    keyword in keywords
+                    for keyword in [
+                        "gall",
+                        "gallbladder",
+                        "gall-bladder",
+                        "gallbladders",
+                        "gall-bladders",
+                    ]
+                ]
+            )
+            and "gallbladder" in organ_names
+        ):
+            occ_organ_indices.remove(organ2ind["urinary bladder"])
+            occ_organ_names.remove("urinary bladder")
+            keywords = [
+                keyword
+                for keyword in keywords
+                if keyword not in ["bladder", "bladders"]
+            ]
+        abstract["occ_organ_indices"] = occ_organ_indices
+        abstract["occ_organ_names"] = occ_organ_names
+        abstract["keywords"] = keywords
+
+    return dset
 
 
 def create_all_mesh_dataset(
@@ -189,6 +335,9 @@ def create_all_mesh_dataset(
                 occ_organ_count_dict[organ_name] += 1
     print("Organ occurrence counts in dataset...")
     print(occ_organ_count_dict)
+
+    print("Fixing keyword detection...")
+    dset_sample = fix_keyword_detection_issues(dset_sample, organ2ind)
 
     dset_train, dset_val_test = dataset_split(dset_sample, test_size=train_percentage)
     dset_val, dset_test = dataset_split(dset_val_test, test_size=0.5)

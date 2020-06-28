@@ -4,14 +4,13 @@ import torch.nn.functional as F
 
 
 class OrganDistanceLoss(nn.Module):
-    def __init__(self, device, voxel_temperature, organ_temperature):
+    def __init__(self, voxel_temperature, organ_temperature):
         super(OrganDistanceLoss, self).__init__()
-        self.device = device
         self.voxel_temperature = voxel_temperature
         self.organ_temperature = organ_temperature
 
     def forward(
-        self, predictions: torch.Tensor, anchors: torch.Tensor, lengths: torch.Tensor,
+        self, predictions: torch.Tensor, anchors: torch.Tensor, lengths: torch.Tensor
     ) -> torch.Tensor:
         """Computes the minimum distance to organ loss.
 
@@ -19,12 +18,11 @@ class OrganDistanceLoss(nn.Module):
             predictions: Tensor with shape [batch_size, 3]
             anchors: Tensor with shape [batch_size, max_organs_in_batch, num_sampled_points, 3]
             lengths: Tensor with shape [batch_size]
-            devce: A torch device - either cpu or gpu
         """
         mask = (
             torch.arange(torch.max(lengths))
             .expand(lengths.size()[0], torch.max(lengths))
-            .to(self.device)
+            .to(predictions.device)
             < lengths.unsqueeze(1)
         ).float()
         mask[torch.where(mask == 0)] = 1e15

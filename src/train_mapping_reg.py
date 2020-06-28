@@ -84,9 +84,7 @@ def train(
     # Check for the type of loss
     logging.warning(f"Using {num_anchors} voxel points!")
     criterion = OrganDistanceLoss(
-        device=device,
-        voxel_temperature=voxel_temperature,
-        organ_temperature=organ_temperature,
+        voxel_temperature=voxel_temperature, organ_temperature=organ_temperature
     )
     # noinspection PyUnresolvedReferences
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -269,10 +267,7 @@ def parse_args():
         help="Where to save the model.",
     )
     parser.add_argument(
-        "--num_anchors",
-        type=int,
-        default=1,
-        help="The number of anchor points to use.",
+        "--num_anchors", type=int, default=1, help="The number of anchor points to use."
     )
     parser.add_argument(
         "--save_intermediate_model_path",

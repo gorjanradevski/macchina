@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import random
-from typing import Dict, List, Tuple
+from typing import List, Tuple, Dict
 
 import numpy as np
 import spacy
@@ -16,8 +16,7 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from torch.utils.data import DataLoader, Dataset
 
-from voxel_mapping.anchors import create_ind2anchors, create_ind2centers
-from voxel_mapping.losses import OrganDistanceLoss, MinDistanceLoss, BaselineRegLoss
+from voxel_mapping.losses import OrganDistanceLoss
 from utils.constants import VOXELMAN_CENTER
 
 colors = mcolors.CSS4_COLORS
@@ -26,17 +25,17 @@ logging.basicConfig(level=logging.INFO)
 
 @torch.no_grad()
 def visualize_mappings(
-    samples: List, organs_dir_path: str, model: nn.Module, device: torch.device
+    samples: List,
+    ind2organ: Dict,
+    organ2voxels: Dict,
+    model: nn.Module,
+    device: torch.device,
 ):
-
-    organ2voxels = json.load(open(os.path.join(organs_dir_path, "organ2voxels.json")))
-    organ2ind = json.load(open(os.path.join(organs_dir_path, "organ2ind.json")))
-    ind2organ = dict(zip(organ2ind.values(), organ2ind.keys()))
 
     organ_indices = [sample["organ_indices"] for sample in samples]
     organ_indices = [item for sublist in organ_indices for item in sublist]
     organ_indices = list(set(organ_indices))
-    organs = [ind2organ[organ_index] for organ_index in organ_indices]
+    organs = [ind2organ[str(organ_index)] for organ_index in organ_indices]
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
@@ -51,7 +50,7 @@ def visualize_mappings(
         sentence_vector = torch.tensor(sample["vector"]).unsqueeze(0).to(device)
         color = colors[list(colors.keys())[np.array(sample["organ_indices"]).sum()]]
         label = "_".join(
-            [ind2organ[organ_ind] for organ_ind in sample["organ_indices"]]
+            [ind2organ[str(organ_ind)] for organ_ind in sample["organ_indices"]]
         )
         coordinates = model(sentence_vector).cpu().numpy() * np.array(VOXELMAN_CENTER)
         ax.scatter(
@@ -91,20 +90,35 @@ class Feedforward(nn.Module):
 
 
 class SentenceVectorDataset(Dataset):
-    def __init__(self, samples: List, ind2anchors: Dict):
+    def __init__(
+        self, samples: List, ind2organ: str, organ2voxels: str, num_anchors: int = 50
+    ):
         self.samples = samples
-        self.sentence_vectors, self.mappings, self.organs_indices = ([], [], [])
+        self.sentence_vectors, self.indices = ([], [])
         for element in self.samples:
             self.sentence_vectors.append(element["vector"])
-            self.mappings.append([ind2anchors[ind] for ind in element["organ_indices"]])
-            self.organs_indices.append(element["organ_indices"])
+            self.indices.append(element["organ_indices"])
+        self.ind2organ = ind2organ
+        self.organ2voxels = organ2voxels
+        self.num_anchors = num_anchors
+        self.center = torch.from_numpy(VOXELMAN_CENTER)
 
     def __len__(self):
         return len(self.sentence_vectors)
 
     def __getitem__(self, idx: int):
         sentence_vector = torch.tensor(self.sentence_vectors[idx])
-        mapping = torch.tensor(self.mappings[idx]) / torch.tensor(VOXELMAN_CENTER)
+        mapping = (
+            torch.tensor(
+                [
+                    random.sample(
+                        self.organ2voxels[self.ind2organ[str(index)]], self.num_anchors
+                    )
+                    for index in self.indices[idx]
+                ]
+            )
+            / self.center
+        )
         num_organs = len(mapping)
 
         return sentence_vector, mapping, num_organs
@@ -141,16 +155,20 @@ def test_loss_function(
     batch_size=8,
     learning_rate=1e-3,
     weight_decay=0,
-    loss_type="all_voxels",
+    num_anchors=100,
+    voxel_temperature=1,
+    organ_temperature=1,
 ):
 
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     samples = embed_sample_sentences(samples_json_path)
-    organ2ind_path = os.path.join(organs_dir_path, "organ2ind.json")
+    ind2organ_path = os.path.join(organs_dir_path, "ind2organ.json")
     organ2voxels_path = os.path.join(organs_dir_path, "organ2voxels.json")
-    organ2center_path = os.path.join(organs_dir_path, "organ2center.json")
+
+    ind2organ = json.load(open(ind2organ_path))
+    organ2voxels = json.load(open(organ2voxels_path))
 
     input_size = len(samples[0]["vector"])
     hidden_size = input_size // 2
@@ -162,20 +180,11 @@ def test_loss_function(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
 
-    if loss_type == "all_voxels":
-        logging.warning("Using all organ points!")
-        ind2anchors = create_ind2anchors(organ2ind_path, organ2voxels_path, 1000)
-        criterion = OrganDistanceLoss()
-    elif loss_type == "one_voxel":
-        logging.warning("Using only one organ center!")
-        ind2anchors = create_ind2centers(organ2ind_path, organ2center_path)
-        criterion = MinDistanceLoss()
-    else:
-        logging.warning("Using only one organ center with baseline MSE loss")
-        ind2anchors = create_ind2centers(organ2ind_path, organ2center_path)
-        criterion = BaselineRegLoss()
-
-    dataset = SentenceVectorDataset(samples, ind2anchors)
+    criterion = OrganDistanceLoss(
+        voxel_temperature=voxel_temperature, organ_temperature=organ_temperature
+    )
+    logging.warning(f"Using {num_anchors} voxel points!")
+    dataset = SentenceVectorDataset(samples, ind2organ, organ2voxels, num_anchors)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -183,7 +192,6 @@ def test_loss_function(
         shuffle=True,
         collate_fn=collate_pad_batch,
     )
-
     for epoch in range(num_epochs):
         logging.info(f"Starting epoch {epoch + 1}...")
         with tqdm(total=len(dataloader)) as pbar:
@@ -208,31 +216,36 @@ def test_loss_function(
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
         if not epoch % 20:
-            visualize_mappings(samples, organs_dir_path, model, device)
+            visualize_mappings(samples, ind2organ, organ2voxels, model, device)
     plt.show()
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Testing loss function")
-    parser.add_argument(
-        "--samples_json_path", type=str, help="Path to json file with test samples"
+    parser = argparse.ArgumentParser(
+        description="Visualize and test the loss function in an overfit experiment."
     )
     parser.add_argument(
-        "--organs_dir_path", type=str, help="Path to the directory with organ info"
-    )
-    parser.add_argument("--num_epochs", type=int, default=10, help="Number of epochs")
-    parser.add_argument("--batch_size", type=int, default=8, help="Batch size")
-    parser.add_argument(
-        "--learning_rate", type=float, default=1e-3, help="Learning rate"
+        "--samples_json_path", type=str, help="Path to json file with test samples."
     )
     parser.add_argument(
-        "--weight_decay", type=float, default=0.0, help="Weight decay parameter"
+        "--organs_dir_path", type=str, help="Path to the directory with organ info."
+    )
+    parser.add_argument("--num_epochs", type=int, default=10, help="Number of epochs.")
+    parser.add_argument("--batch_size", type=int, default=8, help="Batch size.")
+    parser.add_argument(
+        "--learning_rate", type=float, default=1e-3, help="Learning rate."
     )
     parser.add_argument(
-        "--loss_type",
-        type=str,
-        default="mse_loss",
-        help="The type of loss to use to train the model",
+        "--weight_decay", type=float, default=0.0, help="Weight decay parameter."
+    )
+    parser.add_argument(
+        "--num_anchors", type=int, default=1, help="The number of anchor points to use."
+    )
+    parser.add_argument(
+        "--voxel_temperature", type=float, default=1.0, help="The voxel temperature."
+    )
+    parser.add_argument(
+        "--organ_temperature", type=float, default=1.0, help="The organ temperature."
     )
     return parser.parse_args()
 
@@ -246,7 +259,9 @@ def main():
         args.batch_size,
         args.learning_rate,
         args.weight_decay,
-        args.loss_type,
+        args.num_anchors,
+        args.voxel_temperature,
+        args.organ_temperature,
     )
 
 

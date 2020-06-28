@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import random
+from typing import List, Dict
 
 import numpy as np
 import torch
@@ -12,38 +13,28 @@ from torch import nn
 from tqdm import tqdm
 from transformers import BertConfig, BertTokenizer
 
-from utils.constants import VOXELMAN_CENTER, bert_variants
-from voxel_mapping.models import SentenceMappingsProducer
+from utils.constants import VOXELMAN_CENTER
+from voxel_mapping.models import RegModel
 
 colors = mcolors.CSS4_COLORS
 
 
 @torch.no_grad()
 def visualize_mappings(
-    organs_dir_path: str, test_json_path: str, bert_name: str, checkpoint_path: str
+    samples: List,
+    ind2organ: Dict,
+    organ2voxels: Dict,
+    model,
+    tokenizer,
+    device: torch.device,
 ):
-    # Check for CUDA
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # Check for valid bert
-    assert bert_name in bert_variants
 
-    config = BertConfig.from_pretrained(bert_name)
-    model = nn.DataParallel(
-        SentenceMappingsProducer(bert_name, config, final_project_size=3)
-    ).to(device)
-    # Load model
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    tokenizer = BertTokenizer.from_pretrained(bert_name)
-
-    test_samples = json.load(open(test_json_path))
-    organ2voxels = json.load(open(os.path.join(organs_dir_path, "organ2voxels.json")))
-    organ2ind = json.load(open(os.path.join(organs_dir_path, "organ2ind.json")))
-    ind2organ = dict(zip(organ2ind.values(), organ2ind.keys()))
-
-    organ_indices = [sample["organ_indices"] for sample in test_samples]
+    organ_indices = [sample["organ_indices"] for sample in samples]
     organ_indices = [item for sublist in organ_indices for item in sublist]
     organ_indices = list(set(organ_indices))
     organs = [ind2organ[organ_index] for organ_index in organ_indices]
+
+    organ2ind = dict(zip(ind2organ.values(), ind2organ.keys()))
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
@@ -55,7 +46,7 @@ def visualize_mappings(
         ax.scatter(points[:, 0], points[:, 1], points[:, 2], marker=".", alpha=0.05)
 
     organ_coords_dict = {}
-    for sample in tqdm(test_samples):
+    for sample in tqdm(samples):
         sentence = sample["text"]
         color = colors[list(colors.keys())[np.array(sample["organ_indices"]).sum()]]
         label = ", ".join(
@@ -101,6 +92,32 @@ def visualize_mappings(
     plt.show()
 
 
+def visualize_bert_mappings(
+    organs_dir_path: str, samples_json_path: str, bert_name: str, checkpoint_path: str
+):
+
+    # Check for CUDA
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    samples = json.load(open(samples_json_path))
+
+    ind2organ_path = os.path.join(organs_dir_path, "ind2organ.json")
+    organ2voxels_path = os.path.join(organs_dir_path, "organ2voxels.json")
+
+    ind2organ = json.load(open(ind2organ_path))
+    organ2voxels = json.load(open(organ2voxels_path))
+
+    config = BertConfig.from_pretrained(bert_name)
+    model = nn.DataParallel(RegModel(bert_name, config, final_project_size=3)).to(
+        device
+    )
+    # Load model
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    tokenizer = BertTokenizer.from_pretrained(bert_name)
+
+    visualize_mappings(samples, ind2organ, organ2voxels, model, tokenizer, device)
+
+
 def parse_args():
     """Parse command line arguments.
     Returns:
@@ -113,14 +130,16 @@ def parse_args():
         default="data/data_organs",
         help="Path to the data organs directory path.",
     )
-    parser.add_argument("--test_json_path", type=str, help="Path to the test set")
+    parser.add_argument(
+        "--samples_json_path", type=str, help="Path to the json file with the samples."
+    )
     parser.add_argument(
         "--bert_name",
         type=str,
         default="bert-base-uncased",
         help="Should be one of [bert-base-uncased, allenai/scibert_scivocab_uncased,"
         "monologg/biobert_v1.1_pubmed, emilyalsentzer/Bio_ClinicalBERT,"
-        "google/bert_uncased_L-4_H-512_A-8]",
+        "google/bert_uncased_L-4_H-512_A-8].",
     )
     parser.add_argument(
         "--checkpoint_path",
@@ -133,8 +152,11 @@ def parse_args():
 
 def main():
     args = parse_args()
-    visualize_mappings(
-        args.organs_dir_path, args.test_json_path, args.bert_name, args.checkpoint_path
+    visualize_bert_mappings(
+        args.organs_dir_path,
+        args.samples_json_path,
+        args.bert_name,
+        args.checkpoint_path,
     )
 
 
