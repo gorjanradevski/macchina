@@ -241,6 +241,13 @@ def create_organ_dicts(sio_atlas_path, organs_dir_path):
         del organ2label[item]
         del organ2alias[item]
 
+    """Removal of small organs with less than 1000 voxels"""
+    organs_to_remove_small = "cystic duct"
+    organs_to_remove_small = organs_to_remove_small.split(", ")
+    for item in organs_to_remove_small:
+        del organ2label[item]
+        del organ2alias[item]
+
     """Mergers of stomach segments into "stomach"""
     organs_to_merge_stomach = "fundus of stomach, greater curvature, lesser curvature, body of stomach, cardia, stomach"
     organs_to_merge_stomach = organs_to_merge_stomach.split(", ")
@@ -476,9 +483,6 @@ def create_organ_dicts(sio_atlas_path, organs_dir_path):
         json.dump(organ2alias, outfile)
 
     organ2voxels = generate_organ2voxels(voxelman_images_path, organ2label)
-    organ2voxels_eroded = generate_organ2voxels_eroded(
-        voxelman_images_path, organ2label
-    )
     organ2center = {}
     for organ, labels in organ2label.items():
         organ2center[organ] = get_center_of_mass(labels, voxelman_images_path)
@@ -493,10 +497,6 @@ def create_organ_dicts(sio_atlas_path, organs_dir_path):
         json.dump(organ2center, outfile)
     with open(os.path.join(organs_dir_path, "organ2voxels.json"), "w") as outfile:
         json.dump(organ2voxels, outfile)
-    with open(
-        os.path.join(organs_dir_path, "organ2voxels_eroded.json"), "w"
-    ) as outfile:
-        json.dump(organ2voxels_eroded, outfile)
     with open(os.path.join(organs_dir_path, "organ2summary.json"), "w") as outfile:
         json.dump(organ2summary, outfile)
 

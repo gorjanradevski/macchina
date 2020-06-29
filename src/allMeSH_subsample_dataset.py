@@ -158,7 +158,7 @@ def fix_keyword_detection_issues(dset: str, organ2ind: Dict):
     return dset
 
 
-def create_all_mesh_dataset(
+def subsample_all_mesh_dataset(
     src_dset_path: str,
     dst_dset_path: str,
     organs_dir_path: str,
@@ -166,7 +166,7 @@ def create_all_mesh_dataset(
     organ_cap_multi: int,
     train_percentage: float,
     generate_maskwords: bool = False,
-    take_short: bool = True,
+    take_short: bool = False,
 ):
     """Create a dataset based on a directory containing json files with allMesh dataset abstracts
     Arguments:
@@ -176,6 +176,7 @@ def create_all_mesh_dataset(
         organ_cap (int): Maximum number of organ occurrences in dataset subset.
         train_percentage (float): Percentage of training set samples.
         generate_maskwords (bool): Whether to recalculate keywords.
+        take_short (bool): Whether to only take samples shorter than 512 tokens
     """
 
     if not os.path.exists(os.path.dirname(dst_dset_path)):
@@ -361,7 +362,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    create_all_mesh_dataset(
+    subsample_all_mesh_dataset(
         args.src_dset_path,
         args.dst_dset_path,
         args.organs_dir_path,
