@@ -11,7 +11,6 @@ from scipy.ndimage import binary_erosion, generate_binary_structure
 from skimage.measure import label
 
 from utils.constants import VOXELMAN_CENTER
-from utils.loadsave import store_json
 
 
 def get_images(folder, extension):
@@ -122,9 +121,6 @@ def merge_organ_groups(
     organ2alias = json.load(open(os.path.join(src_dir, "organ2alias.json")))
     organ2center = json.load(open(os.path.join(src_dir, "organ2center.json")))
     organ2voxels = json.load(open(os.path.join(src_dir, "organ2voxels.json")))
-    organ2voxels_eroded = json.load(
-        open(os.path.join(src_dir, "organ2voxels_eroded.json"))
-    )
 
     for organs_to_merge, superorgan_name, superorgan_index in zip(
         organ_groups, superorgan_names, superorgan_indices
@@ -138,17 +134,22 @@ def merge_organ_groups(
         aliases = []
         labels = []
         voxels = []
-        voxels_eroded = []
+
+        organ_point_counts = []
+        for organ_to_merge in organs_to_merge:
+            organ_point_counts.append(len(organ2voxels[organ_to_merge]))
+        smallest_point_count = min(organ_point_counts)
+
         for organ_to_merge in organs_to_merge:
             aliases = aliases + organ2alias[organ_to_merge]
             labels = labels + organ2label[organ_to_merge]
-            voxels = voxels + organ2voxels[organ_to_merge]
-            voxels_eroded = voxels + organ2voxels_eroded[organ_to_merge]
+            voxels = voxels + random.sample(
+                organ2voxels[organ_to_merge], smallest_point_count
+            )
 
         organ2alias[superorgan_name] = aliases
         organ2label[superorgan_name] = labels
         organ2voxels[superorgan_name] = voxels
-        organ2voxels_eroded[superorgan_name] = voxels_eroded
         organ2center[superorgan_name] = get_center_of_mass(
             organ2label[superorgan_name], images_path
         )
@@ -167,18 +168,16 @@ def merge_organ_groups(
             del organ2alias[organ_to_merge]
             del organ2center[organ_to_merge]
             del organ2voxels[organ_to_merge]
-            del organ2voxels_eroded[organ_to_merge]
 
     organ2summary = get_organ2summary(organ2voxels, num_anchors=1000)
 
-    store_json(ind2organ, os.path.join(dst_dir, "ind2organ.json"))
-    store_json(organ2ind, os.path.join(dst_dir, "organ2ind.json"))
-    store_json(organ2label, os.path.join(dst_dir, "organ2label.json"))
-    store_json(organ2alias, os.path.join(dst_dir, "organ2alias.json"))
-    store_json(organ2center, os.path.join(dst_dir, "organ2center.json"))
-    store_json(organ2voxels, os.path.join(dst_dir, "organ2voxels.json"))
-    store_json(organ2voxels_eroded, os.path.join(dst_dir, "organ2voxels_eroded.json"))
-    store_json(organ2summary, os.path.join(dst_dir, "organ2summary.json"))
+    json.dump(ind2organ, open(os.path.join(dst_dir, "ind2organ.json"), "w"))
+    json.dump(organ2ind, open(os.path.join(dst_dir, "organ2ind.json"), "w"))
+    json.dump(organ2label, open(os.path.join(dst_dir, "organ2label.json"), "w"))
+    json.dump(organ2alias, open(os.path.join(dst_dir, "organ2alias.json"), "w"))
+    json.dump(organ2center, open(os.path.join(dst_dir, "organ2center.json"), "w"))
+    json.dump(organ2voxels, open(os.path.join(dst_dir, "organ2voxels.json"), "w"))
+    json.dump(organ2summary, open(os.path.join(dst_dir, "organ2summary.json"), "w"))
 
 
 def parse_args():

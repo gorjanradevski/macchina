@@ -118,8 +118,6 @@ def return_voxels_eroded(
     else:
         center = np.zeros(shape=(1, 3))
 
-    #     indices = np.logical_or.reduce([images == label for label in labels])
-
     indices = np.zeros(images.shape).astype(bool)
     for _label in labels:
         indices = np.logical_or.reduce([indices, images == _label])

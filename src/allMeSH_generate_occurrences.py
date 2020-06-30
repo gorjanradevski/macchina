@@ -3,9 +3,11 @@ import json
 import os
 from typing import Dict
 
-from tqdm.notebook import tqdm
+import seaborn as sns  # noqa: F401
+from matplotlib import pyplot as plt  # noqa: F401
+from tqdm import tqdm
 
-from utils.text import detect_occurrences
+from utils.text import count_occurrences, detect_occurrences
 
 
 def fix_keyword_detection_issues(dset: str, organ2ind: Dict):
@@ -150,86 +152,66 @@ def fix_keyword_detection_issues(dset: str, organ2ind: Dict):
     return dset
 
 
-def remove_names_and_indices(samples, organs_to_remove, organ2ind):
+def generate_occurrences(src_dset_path: str, dst_dset_path: str, organs_dir_path: str):
 
-    for sample in tqdm(samples):
-        organ_names = sample["organ_names"]
-        occ_organ_names = sample["occ_organ_names"]
+    dset = json.load(open(src_dset_path))
 
-        sample["organ_names"] = [
-            name for name in organ_names if name not in organs_to_remove
-        ]
-        sample["occ_organ_names"] = [
-            name for name in occ_organ_names if name not in organs_to_remove
-        ]
-        sample["organ_indices"] = [organ2ind[organ] for organ in sample["organ_names"]]
-        sample["occ_organ_indices"] = [
-            organ2ind[organ] for organ in sample["occ_organ_indices"]
-        ]
+    organ2alias = json.load(open(os.path.join(organs_dir_path, "organ2alias.json")))
+    organ2ind = json.load(open(os.path.join(organs_dir_path, "organ2ind.json")))
 
-    return samples
+    print("Generating maskwords...")
+    all_aliases = [item for sublist in organ2alias.values() for item in sublist]
+    for abstract in tqdm(dset):
+        abstract["keywords"] = detect_occurrences(abstract["text"], all_aliases)
 
+    print("Counting organ occurrences...")
+    for abstract in tqdm(dset):
+        text = abstract["text"]
+        occ_organ_names = []
+        occ_organ_indices = []
+        for organ, aliases in organ2alias.items():
+            if count_occurrences(text, aliases):
+                occ_organ_names.append(organ)
+                occ_organ_indices.append(organ2ind[organ])
+        abstract["occ_organ_names"] = occ_organ_names
+        abstract["occ_organ_indices"] = occ_organ_indices
 
-def remove_dataset_organs(src_dset, dst_dset, organs_dir, organs_to_remove):
+    occ_organ_count_dict = {}
+    for abstract in tqdm(dset):
+        organ_names = abstract["occ_organ_names"]
+        for organ_name in organ_names:
+            if organ_name not in occ_organ_count_dict:
+                occ_organ_count_dict[organ_name] = 1
+            else:
+                occ_organ_count_dict[organ_name] += 1
+    print("Organ occurrence counts in dataset...")
+    print(occ_organ_count_dict)
 
-    organ2ind = json.load(open(os.path.join(organs_dir, "organ2ind.json")))
-    organ2alias = json.load(open(os.path.join(organs_dir, "organ2alias.json")))
+    print("Fixing keyword detection...")
+    dset = fix_keyword_detection_issues(dset, organ2ind)
 
-    all_aliases = [
-        organ_alias
-        for organ_aliases in organ2alias.values()
-        for organ_alias in organ_aliases
-    ]
-
-    aliases_to_remove = []
-    for organ_to_remove in organs_to_remove:
-        organ_aliases = organ2alias[organ_to_remove]
-        aliases_to_remove.extend(organ_aliases)
-
-    new_aliases = list(set(all_aliases).difference(set(organ_aliases)))
-
-    samples = json.load(open(src_dset))
-
-    samples = remove_names_and_indices(samples, organs_to_remove, organ2ind)
-    samples = [sample for sample in samples if sample["organ_names"]]
-
-    for sample in tqdm(samples):
-        sample["keywords"] = detect_occurrences(sample["text"], new_aliases)
-
-    samples = fix_keyword_detection_issues(samples, organ2ind)
-
-    with open(dst_dset, "w") as outfile:
-        json.dump(samples, outfile)
+    json.dump(dset, open(dst_dset_path, "w"))
 
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Remove a set of organs from the dataset."
+        description="Generate occurrence annotation and maskwords."
     )
-    parser.add_argument("--src_dset", type=str, help="Path to the original dataset.")
+    parser.add_argument("--src_dset_path", type=str, help="Path to the source dataset.")
     parser.add_argument(
-        "--dst_dset", type=str, help="Path under which the new dataset is stored."
+        "--dst_dset_path", type=str, help="Path under which the dataset is saved."
     )
     parser.add_argument(
-        "--organs_dir",
+        "--organs_dir_path",
         type=str,
-        help="Path to the directory with the atlas dictionaries that contain the indices and aliases of organs.",
+        help="Path to the directory with organ dictionaries.",
     )
-    parser.add_argument(
-        "--organs_to_remove",
-        type=str,
-        action="append",
-        help="A set of organ names that will be removed",
-    )
-
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    remove_dataset_organs(
-        args.src_dset, args.dst_dset, args.organs_dir, args.organs_to_remove
-    )
+    generate_occurrences(args.src_dset_path, args.dst_dset_path, args.organs_dir_path)
 
 
 if __name__ == "__main__":

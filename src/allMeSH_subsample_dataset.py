@@ -3,7 +3,6 @@ import json
 import logging
 import os
 import random
-from typing import Dict
 
 import seaborn as sns  # noqa: F401
 from matplotlib import pyplot as plt  # noqa: F401
@@ -11,151 +10,8 @@ from sklearn.model_selection import train_test_split as dataset_split
 from tqdm import tqdm
 from transformers import BertTokenizer
 
-from utils.text import count_occurrences, detect_occurrences
 
 logging.getLogger("transformers.tokenization_utils").setLevel(logging.ERROR)
-
-
-def fix_keyword_detection_issues(dset: str, organ2ind: Dict):
-
-    # # SOLVE CARDIA PROBLEM
-
-    for ind, abstract in tqdm(enumerate(dset)):
-        keywords = abstract["keywords"]
-        occ_organ_indices = abstract["occ_organ_indices"]
-        occ_organ_names = abstract["occ_organ_names"]
-        organ_names = abstract["organ_names"]
-        if (
-            "cardiac" in keywords
-            and "stomach" in occ_organ_names
-            and any(
-                [
-                    item in organ_names
-                    for item in ["atrium", "ventricle", "myocardium", "pericardium"]
-                ]
-            )
-        ):
-            occ_organ_indices.remove(organ2ind["stomach"])
-            occ_organ_names.remove("stomach")
-        if (
-            "cardia" in keywords
-            and "myocardium" in occ_organ_names
-            and any([item in organ_names for item in ["stomach"]])
-        ):
-            occ_organ_indices.remove(organ2ind["myocardium"])
-            occ_organ_names.remove("myocardium")
-        abstract["occ_organ_indices"] = occ_organ_indices
-        abstract["occ_organ_names"] = occ_organ_names
-
-    inds = []
-    for ind, abstract in tqdm(enumerate(dset)):
-        keywords = abstract["keywords"]
-        occ_organ_indices = abstract["occ_organ_indices"]
-        occ_organ_names = abstract["occ_organ_names"]
-        organ_names = abstract["organ_names"]
-        if "cardiac" in keywords and "stomach" in occ_organ_names:
-            inds.append(ind)
-
-    # # SOLVE THE LIVER - DELIVER PROBLEM
-
-    for ind, abstract in tqdm(enumerate(dset)):
-        keywords = abstract["keywords"]
-        occ_organ_indices = abstract["occ_organ_indices"]
-        occ_organ_names = abstract["occ_organ_names"]
-        organ_names = abstract["organ_names"]
-        if (
-            any(
-                [
-                    keyword in keywords
-                    for keyword in ["delivery", "delivered", "deliver", "delivering"]
-                ]
-            )
-            and "liver" not in organ_names
-        ):
-            occ_organ_indices.remove(organ2ind["liver"])
-            occ_organ_names.remove("liver")
-        keywords = [
-            keyword
-            for keyword in keywords
-            if keyword not in ["delivery", "delivered", "deliver", "delivering"]
-        ]
-        abstract["occ_organ_indices"] = occ_organ_indices
-        abstract["occ_organ_names"] = occ_organ_names
-        abstract["keywords"] = keywords
-
-    # # SOLVE THE COLON - COLONISE PROBLEM
-
-    inds = []
-    for ind, abstract in tqdm(enumerate(dset)):
-        keywords = abstract["keywords"]
-        occ_organ_indices = abstract["occ_organ_indices"]
-        occ_organ_names = abstract["occ_organ_names"]
-        organ_names = abstract["organ_names"]
-        if (
-            any(
-                [
-                    keyword in keywords
-                    for keyword in [
-                        "colonize",
-                        "colonise",
-                        "colonized",
-                        "colonised",
-                        "colonies",
-                    ]
-                ]
-            )
-            and "colon" not in organ_names
-        ):
-            occ_organ_indices.remove(organ2ind["colon"])
-            occ_organ_names.remove("colon")
-        keywords = [
-            keyword
-            for keyword in keywords
-            if keyword
-            not in ["colonize", "colonise", "colonized", "colonised", "colonies"]
-        ]
-        abstract["occ_organ_indices"] = occ_organ_indices
-        abstract["occ_organ_names"] = occ_organ_names
-        abstract["keywords"] = keywords
-
-    # # SOLVE THE BLADDER - GALLBLADDER PROBLEM
-
-    """Gallbladder doesn't cause the bladder keyword"""
-    """Bladder does cause problems"""
-
-    for ind, abstract in tqdm(enumerate(dset)):
-        keywords = abstract["keywords"]
-        occ_organ_indices = abstract["occ_organ_indices"]
-        occ_organ_names = abstract["occ_organ_names"]
-        organ_names = abstract["organ_names"]
-        if (
-            any([keyword in keywords for keyword in ["bladder", "bladders"]])
-            and any(
-                [
-                    keyword in keywords
-                    for keyword in [
-                        "gall",
-                        "gallbladder",
-                        "gall-bladder",
-                        "gallbladders",
-                        "gall-bladders",
-                    ]
-                ]
-            )
-            and "gallbladder" in organ_names
-        ):
-            occ_organ_indices.remove(organ2ind["urinary bladder"])
-            occ_organ_names.remove("urinary bladder")
-            keywords = [
-                keyword
-                for keyword in keywords
-                if keyword not in ["bladder", "bladders"]
-            ]
-        abstract["occ_organ_indices"] = occ_organ_indices
-        abstract["occ_organ_names"] = occ_organ_names
-        abstract["keywords"] = keywords
-
-    return dset
 
 
 def subsample_all_mesh_dataset(
@@ -165,18 +21,18 @@ def subsample_all_mesh_dataset(
     organ_cap_single: int,
     organ_cap_multi: int,
     train_percentage: float,
-    generate_maskwords: bool = False,
-    take_short: bool = False,
+    split: bool = False,
+    fit_to_size: bool = False,
 ):
-    """Create a dataset based on a directory containing json files with allMesh dataset abstracts
+    """Subsample a dataset - select a portion of the samples and potentially remove long ones.
     Arguments:
         src_dset_path (str): Path to the source dataset.
         dst_dset_path (str): Path under which the dataset is saved.
         organs_dir_path (str): Path to the directory with organ dictionaries.
         organ_cap (int): Maximum number of organ occurrences in dataset subset.
         train_percentage (float): Percentage of training set samples.
-        generate_maskwords (bool): Whether to recalculate keywords.
-        take_short (bool): Whether to only take samples shorter than 512 tokens
+        split (bool): Whether to split in the train, val and test dataset.
+        fit_to_size (bool): Whether to only take samples shorter than 512 tokens
     """
 
     if not os.path.exists(os.path.dirname(dst_dset_path)):
@@ -184,145 +40,93 @@ def subsample_all_mesh_dataset(
 
     dset = json.load(open(src_dset_path))
 
-    organ2alias = json.load(open(os.path.join(organs_dir_path, "organ2alias.json")))
-    organ2ind = json.load(open(os.path.join(organs_dir_path, "organ2ind.json")))
-
-    """Subsample dataset"""
-    print("Subsampling the dataset...")
-    random.shuffle(dset)
-    tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-
-    dset_single = [item for item in dset if len(item["organ_names"]) == 1]
-    dset_multi = [item for item in dset if len(item["organ_names"]) > 1]
-
-    random.shuffle(dset_single)
-    random.shuffle(dset_multi)
-
-    seen_organs = dict(zip(organ2alias.keys(), len(organ2alias) * [0]))
-    dset_sample_single = []
-    print("Taking samples with single organ occurrence...")
-
-    for i, abstract in enumerate(dset_single):
-        organs = abstract["organ_names"]
-        if any([seen_organs[organ] < organ_cap_single for organ in organs]):
-            for organ in organs:
-                seen_organs[organ] += 1
-            dset_sample_single.append(abstract)
-            if not i % 1000:
-                print(
-                    f"Percent complete: {sum(seen_organs.values())/(organ_cap_single * len(seen_organs))*100 :.2f}%"
-                )
-                print(f"Percent dset seen: {i/len(dset_single)*100 :.2f}%")
-
-            if all([item == organ_cap_single for item in seen_organs.values()]):
-                break
-
-    seen_organs = dict(zip(organ2alias.keys(), len(organ2alias) * [0]))
-    dset_sample_multi = []
-    print("Taking samples with multiple organ occurrences...")
-
-    for i, abstract in enumerate(dset_multi):
-        organs = abstract["organ_names"]
-        if any([seen_organs[organ] < organ_cap_multi for organ in organs]):
-            for organ in organs:
-                seen_organs[organ] += 1
-            dset_sample_multi.append(abstract)
-            if not i % 1000:
-                print(
-                    f"Percent complete: {sum(seen_organs.values())/(organ_cap_multi * len(seen_organs))*100 :.2f}%"
-                )
-                print(f"Percent dset seen: {i/len(dset_multi)*100 :.2f}%")
-
-            if all([item == organ_cap_multi for item in seen_organs.values()]):
-                break
-
-    dset_sample = dset_sample_single + dset_sample_multi
-
-    """Taking only short abstracts"""
-    if take_short:
+    if fit_to_size:
         print("Taking only short abstracts...")
-        dset_sample = [
-            sample
-            for sample in dset_sample
-            if len(tokenizer.encode(sample["text"])) < 512
+        tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
+        dset = [
+            sample for sample in dset if len(tokenizer.encode(sample["text"])) < 512
         ]
 
-    """Create mask words"""
-    if generate_maskwords:
-        print("Generating maskwords...")
-        organ2alias = json.load(open(os.path.join(organs_dir_path, "organ2alias.json")))
-        all_aliases = [item for sublist in organ2alias.values() for item in sublist]
-        for abstract in tqdm(dset_sample):
-            abstract["keywords"] = detect_occurrences(abstract["text"], all_aliases)
+    organ2ind = json.load(open(os.path.join(organs_dir_path, "organ2ind.json")))
 
-    """Count organ occurrences"""
-    for abstract in tqdm(dset_sample):
-        text = abstract["text"]
-        occ_organ_names = []
-        occ_organ_indices = []
-        for organ, aliases in organ2alias.items():
-            if count_occurrences(text, aliases):
-                occ_organ_names.append(organ)
-                occ_organ_indices.append(organ2ind[organ])
-        abstract["occ_organ_names"] = occ_organ_names
-        abstract["occ_organ_indices"] = occ_organ_indices
+    organ_names = list(organ2ind.keys())
 
-    """Count organ appearances via mesh terms"""
-    organ_count_dict = {}
-    for abstract in tqdm(dset_sample):
-        organ_names = abstract["organ_names"]
-        for organ_name in organ_names:
-            if organ_name not in organ_count_dict:
-                organ_count_dict[organ_name] = 1
-            else:
-                organ_count_dict[organ_name] += 1
-    print("Organ mesh term appearance counts in dataset...")
-    print(organ_count_dict)
+    print("Taking samples with single organ occurrence...")
+    organs_singles = {}
 
-    """Count organ appearances via organ occurrences"""
-    occ_organ_count_dict = {}
-    for abstract in tqdm(dset_sample):
-        organ_names = abstract["occ_organ_names"]
-        for organ_name in organ_names:
-            if organ_name not in occ_organ_count_dict:
-                occ_organ_count_dict[organ_name] = 1
-            else:
-                occ_organ_count_dict[organ_name] += 1
-    print("Organ occurrence counts in dataset...")
-    print(occ_organ_count_dict)
+    for organ_name in tqdm(organ_names):
+        organs_singles[organ_name] = [
+            sample for sample in dset if sample["organ_names"] == [organ_name]
+        ]
 
-    print("Fixing keyword detection...")
-    dset_sample = fix_keyword_detection_issues(dset_sample, organ2ind)
+    print("Taking samples with multiple organ occurrences...")
+    organs_multis = {}
 
-    dset_train, dset_val_test = dataset_split(dset_sample, train_size=train_percentage)
-    dset_val, dset_test = dataset_split(dset_val_test, test_size=0.5)
+    for organ_name in tqdm(organ_names):
+        organs_multis[organ_name] = [
+            sample
+            for sample in dset
+            if organ_name in sample["organ_names"] and len(sample["organ_names"]) > 1
+        ]
 
-    with open(dst_dset_path, "w") as outfile:
-        json.dump(dset_sample, outfile)
+    for organ_name in tqdm(organ_names):
+        organs_singles[organ_name] = (
+            random.sample(organs_singles[organ_name], organ_cap_single)
+            if len(organs_singles[organ_name]) > organ_cap_single
+            else organs_singles[organ_name]
+        )
 
-    with open(
-        os.path.splitext(dst_dset_path)[0]
-        + "_train"
-        + os.path.splitext(dst_dset_path)[1],
-        "w",
-    ) as outfile:
-        json.dump(dset_train, outfile)
+    for organ_name in tqdm(organ_names):
+        organs_multis[organ_name] = (
+            random.sample(organs_multis[organ_name], organ_cap_multi)
+            if len(organs_multis[organ_name]) > organ_cap_multi
+            else organs_multis[organ_name]
+        )
 
-    with open(
-        os.path.splitext(dst_dset_path)[0]
-        + "_val"
-        + os.path.splitext(dst_dset_path)[1],
-        "w",
-    ) as outfile:
-        json.dump(dset_val, outfile)
+    dset_sample = []
 
-    with open(
-        os.path.splitext(dst_dset_path)[0]
-        + "_test"
-        + os.path.splitext(dst_dset_path)[1],
-        "w",
-    ) as outfile:
-        json.dump(dset_test, outfile)
+    for organ_name in tqdm(organ_names):
+        dset_sample.extend(organs_singles[organ_name])
+        dset_sample.extend(organs_multis[organ_name])
+
+    if split:
+        dset_train, dset_val_test = dataset_split(
+            dset_sample, train_size=train_percentage
+        )
+        dset_val, dset_test = dataset_split(dset_val_test, test_size=0.5)
+
+    json.dump(dset_sample, open(dst_dset_path, "w"))
+
+    if split:
+        json.dump(
+            dset_train,
+            open(
+                os.path.splitext(dst_dset_path)[0]
+                + "_train"
+                + os.path.splitext(dst_dset_path)[1],
+                "w",
+            ),
+        )
+
+        json.dump(
+            dset_val,
+            open(
+                os.path.splitext(dst_dset_path)[0]
+                + "_val"
+                + os.path.splitext(dst_dset_path)[1],
+                "w",
+            ),
+        )
+
+        json.dump(
+            dset_test,
+            open(
+                os.path.splitext(dst_dset_path)[0]
+                + "_test"
+                + os.path.splitext(dst_dset_path)[1],
+                "w",
+            ),
+        )
 
 
 def parse_args():
@@ -356,6 +160,16 @@ def parse_args():
         default=0.7,
         help="Percentage of training set samples.",
     )
+    parser.add_argument(
+        "--split",
+        action="store_true",
+        help="Whether to split the dataset subsequently.",
+    )
+    parser.add_argument(
+        "--fit_to_size",
+        action="store_true",
+        help="Whether to split the dataset subsequently.",
+    )
 
     return parser.parse_args()
 
@@ -369,6 +183,8 @@ def main():
         args.organ_cap_single,
         args.organ_cap_multi,
         args.train_percentage,
+        args.split,
+        args.fit_to_size,
     )
 
 
