@@ -3,21 +3,23 @@ import json
 import logging
 import os
 import random
-from typing import List, Tuple, Dict
+from typing import Dict, List, Tuple
 
 import numpy as np
 import spacy
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from tqdm import tqdm
 from matplotlib import colors as mcolors
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from scipy.spatial import ConvexHull
 from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
-from voxel_mapping.losses import OrganDistanceLoss
 from utils.constants import VOXELMAN_CENTER
+from voxel_mapping.losses import OrganDistanceLoss
 
 colors = mcolors.CSS4_COLORS
 logging.basicConfig(level=logging.INFO)
@@ -35,20 +37,44 @@ def visualize_mappings(
     organ_indices = [sample["organ_indices"] for sample in samples]
     organ_indices = [item for sublist in organ_indices for item in sublist]
     organ_indices = list(set(organ_indices))
-    organs = [ind2organ[str(organ_index)] for organ_index in organ_indices]
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection="3d")
 
-    for i, organ in enumerate(organs):
-        points = organ2voxels[organ]
-        points = random.sample(points, int(len(points) / 500))
-        points = np.array(points)
-        ax.scatter(points[:, 0], points[:, 1], points[:, 2], marker=".", alpha=0.05)
+    maxes = np.array([[0, 0, 0]])
+    mins = np.array([[0, 0, 0]])
+    for i, organ_index in enumerate(organ_indices):
+        # points = organ2voxels[organ]
+        # points = random.sample(points, int(len(points) / 500))
+        # points = np.array(points)
+        # ax.scatter(points[:, 0], points[:, 1], points[:, 2], marker=".", alpha=0.05)
+        color = colors[list(colors.keys())[organ_index + len(ind2organ) + 10]]
+        points = np.array(organ2voxels[ind2organ[str(organ_index)]])
+
+        # To determine axis bounds
+        maxes = np.max(np.concatenate((maxes, points), axis=0), axis=0)[None, :]
+        mins = np.min(np.concatenate((mins, points), axis=0), axis=0)[None, :]
+
+        hull = ConvexHull(points)
+        faces = hull.simplices
+
+        organ_hull = np.array(
+            [
+                [
+                    [points[s[0], 0], points[s[0], 1], points[s[0], 2]],
+                    [points[s[1], 0], points[s[1], 1], points[s[1], 2]],
+                    [points[s[2], 0], points[s[2], 1], points[s[2], 2]],
+                ]
+                for s in faces
+            ]
+        )
+        ax.add_collection3d(Poly3DCollection(organ_hull, alpha=0.025, color=color))
 
     for sample in samples:
         sentence_vector = torch.tensor(sample["vector"]).unsqueeze(0).to(device)
-        color = colors[list(colors.keys())[np.array(sample["organ_indices"]).sum()]]
+        color = colors[
+            list(colors.keys())[np.array(sample["organ_indices"]).sum() + 10]
+        ]
         label = "_".join(
             [ind2organ[str(organ_ind)] for organ_ind in sample["organ_indices"]]
         )
@@ -64,6 +90,18 @@ def visualize_mappings(
             label=label,
         )
 
+    # Expand axis bounds a bit
+    maxes = maxes[0]
+    mins = mins[0]
+    maxes = maxes + 0.2 * np.abs(maxes)
+    mins = mins - 0.2 * np.abs(mins)
+
+    ax.set_xlim((mins[0], maxes[0]))
+    ax.set_ylim((mins[1], maxes[1]))
+    ax.set_zlim((mins[2], maxes[2]))
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_zticklabels([])
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     plt.legend(by_label.values(), by_label.keys())

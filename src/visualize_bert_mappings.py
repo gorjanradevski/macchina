@@ -1,14 +1,15 @@
 import argparse
 import json
 import os
-import random
-from typing import List, Dict
+from typing import Dict, List
 
 import numpy as np
 import torch
 from matplotlib import colors as mcolors
 from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from scipy.spatial import ConvexHull
 from torch import nn
 from tqdm import tqdm
 from transformers import BertConfig, BertTokenizer
@@ -32,16 +33,38 @@ def visualize_mappings(
     organ_indices = [sample["organ_indices"] for sample in samples]
     organ_indices = [item for sublist in organ_indices for item in sublist]
     organ_indices = list(set(organ_indices))
-    organs = [ind2organ[str(organ_index)] for organ_index in organ_indices]
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(6, 9))
     ax = fig.add_subplot(111, projection="3d")
 
-    for i, organ in enumerate(organs):
-        points = organ2voxels[organ]
-        points = random.sample(points, int(len(points) / 500))
-        points = np.array(points)
-        ax.scatter(points[:, 0], points[:, 1], points[:, 2], marker=".", alpha=0.05)
+    maxes = np.array([[0, 0, 0]])
+    mins = np.array([[0, 0, 0]])
+    for i, organ_index in enumerate(organ_indices):
+        # points = organ2voxels[organ]
+        # points = random.sample(points, int(len(points) / 250))
+        # points = np.array(points)
+        # ax.scatter(points[:, 0], points[:, 1], points[:, 2], marker=".", alpha=0.25)
+        color = colors[list(colors.keys())[organ_index + len(ind2organ)]]
+        points = np.array(organ2voxels[ind2organ[str(organ_index)]])
+
+        # To determine axis bounds
+        maxes = np.max(np.concatenate((maxes, points), axis=0), axis=0)[None, :]
+        mins = np.min(np.concatenate((mins, points), axis=0), axis=0)[None, :]
+
+        hull = ConvexHull(points)
+        faces = hull.simplices
+
+        organ_hull = np.array(
+            [
+                [
+                    [points[s[0], 0], points[s[0], 1], points[s[0], 2]],
+                    [points[s[1], 0], points[s[1], 1], points[s[1], 2]],
+                    [points[s[2], 0], points[s[2], 1], points[s[2], 2]],
+                ]
+                for s in faces
+            ]
+        )
+        ax.add_collection3d(Poly3DCollection(organ_hull, alpha=0.05, color=color))
 
     organ_coords_dict = {}
     for sample in tqdm(samples):
@@ -67,22 +90,18 @@ def visualize_mappings(
             label=label,
         )
 
-    # for label, coordinates in organ_coords_dict.items():
-    #     organs = label.split(", ")
-    #     organ_indices = [organ2ind[organ] for organ in organs]
-    #     color = colors[list(colors.keys())[np.array(organ_indices).sum()]]
-    #     coordinates = np.array(coordinates).mean(axis=0)
-    #     ax.scatter(
-    #         coordinates[:, 0],
-    #         coordinates[:, 1],
-    #         coordinates[:, 2],
-    #         c=color,
-    #         s=100,
-    #         marker="*",
-    #         edgecolor="r",
-    #         label=label + " average",
-    #     )
+    # Expand axis bounds a bit
+    maxes = maxes[0]
+    mins = mins[0]
+    maxes = maxes + 0.2 * np.abs(maxes)
+    mins = mins - 0.2 * np.abs(mins)
 
+    ax.set_xlim((mins[0], maxes[0]))
+    ax.set_ylim((mins[1], maxes[1]))
+    ax.set_zlim((mins[2], maxes[2]))
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    ax.set_zticklabels([])
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     plt.legend(by_label.values(), by_label.keys())
