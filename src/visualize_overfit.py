@@ -341,7 +341,7 @@ def test_loss_function(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-        
+
         if visualize_every > 0 and not epoch % visualize_every:
             if visualize_3D:
                 visualize_mappings_3D(samples, ind2organ, organ2voxels, model, device)
