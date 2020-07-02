@@ -15,7 +15,7 @@ from utils.constants import VOXELMAN_CENTER
 
 
 def inference(
-    test_json_path: str, batch_size: int, bert_name: str, checkpoint_path: str,
+    test_json_path: str, batch_size: int, bert_name: str, checkpoint_path: str
 ):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,7 +75,7 @@ def main():
     # imported as a module.
     args = parse_args()
     inference(
-        args.test_json_path, args.batch_size, args.bert_name, args.checkpoint_path,
+        args.test_json_path, args.batch_size, args.bert_name, args.checkpoint_path
     )
 
 

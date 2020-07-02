@@ -57,7 +57,7 @@ def train(
         collate_fn=collate_pad_sentence_class_batch,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, collate_fn=collate_pad_sentence_class_batch,
+        val_dataset, batch_size=batch_size, collate_fn=collate_pad_sentence_class_batch
     )
     config = BertConfig.from_pretrained(bert_name)
     # Prepare model
