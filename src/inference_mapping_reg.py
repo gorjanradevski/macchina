@@ -54,7 +54,7 @@ def inference(
     with torch.no_grad():
         # Restart counters
         evaluator.reset_counters()
-        for sentences, attn_mask, organs_indices in tqdm(test_loader):
+        for sentences, attn_mask, organs_indices, _ in tqdm(test_loader):
             sentences, attn_mask = sentences.to(device), attn_mask.to(device)
             output_mappings = (
                 model(input_ids=sentences, attention_mask=attn_mask).cpu() * center
@@ -63,25 +63,25 @@ def inference(
                 evaluator.update_counters(output_mapping.numpy(), organ_indices.numpy())
 
         print(
-            "The IOR on the non-masked test set is: "
+            "The avg IOR on the test set is: "
             f"{evaluator.get_current_ior()} +/- {evaluator.get_ior_error_bar()}"
         )
         print(
-            "The avg distance on the non-masked test set is: "
+            "The avg distance on the test set is: "
             f"{evaluator.get_current_distance()} +/- {evaluator.get_distance_error_bar()}"
         )
         print(
-            "The avg miss distance on the non-masked test set is: "
+            "The avg miss distance on the test set is: "
             f"{evaluator.get_current_miss_distance()} +/- {evaluator.get_miss_distance_error_bar()}"
         )
         print("============================================")
         for organ_name in evaluator.organ_names:
             if evaluator.get_current_ior_for_organ(organ_name) > -1:
                 print(
-                    f"The IOR for {organ_name} is: {evaluator.get_current_ior_for_organ(organ_name)}"
+                    f"The avg IOR for {organ_name} is: {evaluator.get_current_ior_for_organ(organ_name)}"
                 )
                 print(
-                    f"The NVD for {organ_name} is: {evaluator.get_current_distance_for_organ(organ_name)}"
+                    f"The avg NVD for {organ_name} is: {evaluator.get_current_distance_for_organ(organ_name)}"
                 )
                 print("============================================")
 

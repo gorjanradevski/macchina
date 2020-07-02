@@ -13,7 +13,7 @@ class Evaluator:
         self,
         ind2organ: Dict[int, str],
         organ2label: Dict,
-        organ2sum_vox: str,
+        organ2sum_vox: Dict,
         voxelman_images_path: str,
         total_samples: int,
     ):
@@ -45,14 +45,15 @@ class Evaluator:
         self.index += 1
 
     def get_current_ior(self):
-        return np.round((np.sum(self.corrects) / self.total_samples) * 100, decimals=2)
+        return np.round((np.sum(self.corrects) / self.total_samples) * 100, decimals=1)
 
     def get_current_distance(self):
-        return np.round((np.sum(self.distances) / self.total_samples) / 10, decimals=2)
+        return np.round((np.sum(self.distances) / self.total_samples) / 10, decimals=1)
 
     def get_current_miss_distance(self):
         return np.round(
-            (np.sum(self.distances) / np.count_nonzero(self.distances)) / 10, decimals=2
+            (np.sum(self.distances) / (np.count_nonzero(self.distances) + 1e-15)) / 10,
+            decimals=1,
         )
 
     def voxels_distance(
@@ -98,13 +99,13 @@ class InferenceEvaluator(Evaluator):
     def get_ior_error_bar(self):
         return np.round(
             np.std(self.corrects, ddof=1) / np.sqrt(self.total_samples) * 100,
-            decimals=2,
+            decimals=1,
         )
 
     def get_distance_error_bar(self):
         return np.round(
             np.std(self.distances, ddof=1) / np.sqrt(self.total_samples) / 10,
-            decimals=2,
+            decimals=1,
         )
 
     def get_miss_distance_error_bar(self):
@@ -112,7 +113,7 @@ class InferenceEvaluator(Evaluator):
             np.std(self.distances[np.nonzero(self.distances)], ddof=1)
             / np.sqrt(np.count_nonzero(self.distances))
             / 10,
-            decimals=2,
+            decimals=1,
         )
 
 
@@ -124,25 +125,25 @@ class TrainingEvaluator(Evaluator):
         organ2sum_vox: Dict,
         voxelman_images_path: str,
         total_samples: int,
-        best_avg_distance: float,
+        best_distance: float,
     ):
         super().__init__(
             ind2organ, organ2label, organ2sum_vox, voxelman_images_path, total_samples,
         )
-        self.best_avg_distance = best_avg_distance
-        self.current_average_distance = 0
+        self.best_distance = best_distance
+        self.current_distance = 0
 
-    def reset_current_average_distance(self):
-        self.current_average_distance = 0
+    def reset_current_distance(self):
+        self.current_distance = 0
 
-    def update_current_average_distance(self):
-        self.current_average_distance += self.get_current_distance()
+    def update_current_distance(self):
+        self.current_distance += self.get_current_distance()
 
-    def is_best_avg_distance(self):
-        return self.current_average_distance < self.best_avg_distance
+    def is_best_distance(self):
+        return self.current_distance < self.best_distance
 
-    def update_best_avg_distance(self):
-        self.best_avg_distance = self.current_average_distance
+    def update_best_distance(self):
+        self.best_distance = self.current_distance
 
 
 class InferenceEvaluatorPerOrgan(InferenceEvaluator):
@@ -190,7 +191,7 @@ class InferenceEvaluatorPerOrgan(InferenceEvaluator):
     def get_current_ior_for_organ(self, organ):
         if self.organ_totals[organ]:
             return np.round(
-                self.organ_corrects[organ] / self.organ_totals[organ] * 100, decimals=2,
+                self.organ_corrects[organ] / self.organ_totals[organ] * 100, decimals=1,
             )
         else:
             return -1
@@ -198,7 +199,7 @@ class InferenceEvaluatorPerOrgan(InferenceEvaluator):
     def get_current_distance_for_organ(self, organ):
         if self.organ_totals[organ]:
             return np.round(
-                self.organ_distances[organ] / self.organ_totals[organ] / 10, decimals=2,
+                self.organ_distances[organ] / self.organ_totals[organ] / 10, decimals=1,
             )
         else:
             return -1

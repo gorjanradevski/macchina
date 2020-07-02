@@ -33,6 +33,7 @@ def train(
     save_intermediate_model_path: str,
     log_filepath: str,
     learning_rate: float,
+    weight_decay: float,
     masking: bool,
     clip_val: float,
 ):
@@ -43,14 +44,11 @@ def train(
         logging.basicConfig(level=logging.INFO)
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # Prepare paths
-    organ2mass_path = os.path.join(organs_dir_path, "organ2center.json")
-    ind2organ_path = os.path.join(organs_dir_path, "ind2organ.json")
-    organ2label_path = os.path.join(organs_dir_path, "organ2label.json")
-    organ2summary_path = os.path.join(organs_dir_path, "organ2summary.json")
-    # Load organ to indices to obtain the number of classes
-    ind2organ = json.load(open(ind2organ_path))
-    organ2center = json.load(open(organ2mass_path))
+    # Prepare jsons
+    ind2organ = json.load(open(os.path.join(organs_dir_path, "ind2organ.json")))
+    organ2center = json.load(open(os.path.join(organs_dir_path, "organ2center.json")))
+    organ2label = json.load(open(os.path.join(organs_dir_path, "organ2label.json")))
+    organ2summary = json.load(open(os.path.join(organs_dir_path, "organ2summary.json")))
     num_classes = max([int(index) for index in ind2organ.keys()]) + 1
     # Prepare datasets
     tokenizer = BertTokenizer.from_pretrained(bert_name)
@@ -77,8 +75,10 @@ def train(
     ).to(device)
     criterion = nn.BCEWithLogitsLoss()
     # noinspection PyUnresolvedReferences
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    best_avg_distance = sys.maxsize
+    optimizer = optim.AdamW(
+        model.parameters(), lr=learning_rate, weight_decay=weight_decay
+    )
+    best_distance = sys.maxsize
     cur_epoch = 0
     # Load model
     if checkpoint_path is not None:
@@ -86,29 +86,29 @@ def train(
         model.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         cur_epoch = checkpoint["epoch"]
-        best_avg_ior = checkpoint["best_avg_ior"]
+        best_distance = checkpoint["best_distance"]
         # https://discuss.pytorch.org/t/cuda-out-of-memory-after-loading-model/50681
         del checkpoint
         logging.warning(
             f"Starting training from checkpoint {checkpoint_path} with starting epoch {cur_epoch}!"
         )
-        logging.warning(f"The previous best IOR was: {best_avg_ior}!")
+        logging.warning(f"The previous best distance was: {best_distance}!")
 
     # Prepare evaluator
     evaluator = TrainingEvaluator(
-        ind2organ_path,
-        organ2label_path,
-        organ2summary_path,
+        ind2organ,
+        organ2label,
+        organ2summary,
         voxelman_images_path,
         len(val_dataset),
-        best_avg_distance,
+        best_distance,
     )
     for epoch in range(cur_epoch, cur_epoch + epochs):
         logging.info(f"Starting epoch {epoch + 1}...")
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
-            for sentences, attn_mask, organ_indices in train_loader:
+            for sentences, attn_mask, organ_indices, _ in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward
@@ -131,10 +131,10 @@ def train(
 
         # Set model in evaluation mode
         model.train(False)
-        evaluator.reset_current_average_distance()
+        evaluator.reset_current_distance()
         with torch.no_grad():
             evaluator.reset_counters()
-            for sentences, attn_mask, organs_indices in tqdm(val_loader):
+            for sentences, attn_mask, organs_indices, _ in tqdm(val_loader):
                 sentences, attn_mask = sentences.to(device), attn_mask.to(device)
                 output_mappings = model(input_ids=sentences, attention_mask=attn_mask)
                 y_pred = torch.argmax(output_mappings, dim=-1)
@@ -157,14 +157,14 @@ def train(
                 f"The miss distance on the validation set is {evaluator.get_current_miss_distance()}"
             )
 
-            evaluator.update_current_average_distance()
+            evaluator.update_current_distance()
 
-            if evaluator.is_best_avg_distance():
-                evaluator.update_best_avg_distance()
+            if evaluator.is_best_distance():
+                evaluator.update_best_distance()
                 logging.info("======================")
                 logging.info(
-                    f"Found new best with avg distance: "
-                    f"{evaluator.best_avg_distance} on epoch "
+                    f"Found new best with distance: "
+                    f"{evaluator.best_distance} on epoch "
                     f"{epoch+1}. Saving model!!!"
                 )
                 logging.info("======================")
@@ -172,7 +172,7 @@ def train(
             else:
                 logging.info(
                     f"Avg distance on epoch {epoch+1} is: "
-                    f"{evaluator.current_average_distance}"
+                    f"{evaluator.current_distance}"
                 )
             logging.info("Saving intermediate checkpoint...")
             torch.save(
@@ -180,7 +180,7 @@ def train(
                     "epoch": epoch + 1,
                     "model_state_dict": model.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
-                    "best_distance": evaluator.best_avg_distance,
+                    "best_distance": evaluator.best_distance,
                 },
                 save_intermediate_model_path,
             )
@@ -203,6 +203,7 @@ def main():
         args.save_intermediate_model_path,
         args.log_filepath,
         args.learning_rate,
+        args.weight_decay,
         args.masking,
         args.clip_val,
     )
@@ -267,6 +268,9 @@ def parse_args():
         help="Should be one of [bert-base-uncased, allenai/scibert_scivocab_uncased,"
         "monologg/biobert_v1.1_pubmed, emilyalsentzer/Bio_ClinicalBERT,"
         "google/bert_uncased_L-4_H-512_A-8]",
+    )
+    parser.add_argument(
+        "--weight_decay", type=float, default=0.01, help="The (default) weight decay."
     )
     parser.add_argument(
         "--checkpoint_path",

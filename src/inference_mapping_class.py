@@ -26,11 +26,11 @@ def inference(
 ):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # Prepare paths
+    # Load jsons
     ind2organ = json.load(open(os.path.join(organs_dir_path, "ind2organ.json")))
     organ2label = json.load(open(os.path.join(organs_dir_path, "organ2label.json")))
     organ2voxels = json.load(open(os.path.join(organs_dir_path, "organ2voxels.json")))
-    organ_center = json.load(open(os.path.join(organs_dir_path, "organ2center.json")))
+    organ2center = json.load(open(os.path.join(organs_dir_path, "organ2center.json")))
     # Load organ to indices to obtain the number of classes
     num_classes = max([int(index) for index in ind2organ.keys()]) + 1
     tokenizer = BertTokenizer.from_pretrained(bert_name)
@@ -55,19 +55,18 @@ def inference(
     )
     with torch.no_grad():
         evaluator.reset_counters()
-        for sentences, attn_mask, organs_indices in tqdm(test_loader):
+        for sentences, attn_mask, organs_indices, _ in tqdm(test_loader):
             sentences, attn_mask = sentences.to(device), attn_mask.to(device)
             output_mappings = model(input_ids=sentences, attention_mask=attn_mask)
             y_pred = torch.argmax(output_mappings, dim=-1)
-            pred_organ_names = [ind2organ[str(ind.item())] for ind in y_pred]
-            pred_centers = [organ_center[organ_name] for organ_name in pred_organ_names]
+            pred_centers = [organ2center[ind2organ[str(ind.item())]] for ind in y_pred]
             for pred_center, organ_indices in zip(pred_centers, organs_indices):
                 evaluator.update_counters(
                     np.array(pred_center), np.where(organ_indices == 1)[0]
                 )
 
         print(
-            "The IOR on the test set is: "
+            "The avg IOR on the test set is: "
             f"{evaluator.get_current_ior()} +/- {evaluator.get_ior_error_bar()}"
         )
         print(
@@ -82,10 +81,10 @@ def inference(
         for organ_name in evaluator.organ_names:
             if evaluator.get_current_ior_for_organ(organ_name) > -1:
                 print(
-                    f"The IOR for {organ_name} is: {evaluator.get_current_ior_for_organ(organ_name)}"
+                    f"The avg IOR for {organ_name} is: {evaluator.get_current_ior_for_organ(organ_name)}"
                 )
                 print(
-                    f"The NVD {organ_name} is: {evaluator.get_current_distance_for_organ(organ_name)}"
+                    f"The avg NVD {organ_name} is: {evaluator.get_current_distance_for_organ(organ_name)}"
                 )
                 print("============================================")
 
