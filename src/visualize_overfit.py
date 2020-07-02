@@ -15,6 +15,7 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from scipy.spatial import ConvexHull
+from sklearn.decomposition import PCA
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
@@ -26,7 +27,91 @@ logging.basicConfig(level=logging.INFO)
 
 
 @torch.no_grad()
-def visualize_mappings(
+def visualize_mappings_2D(
+    samples: List,
+    ind2organ: Dict,
+    organ2voxels: Dict,
+    model: nn.Module,
+    device: torch.device,
+):
+
+    organ2ind = dict(zip(ind2organ.values(), ind2organ.keys()))
+    for organ, ind in organ2ind.items():
+        organ2ind[organ] = int(ind)
+    organ_indices = [sample["organ_indices"] for sample in samples]
+    organ_indices = [item for sublist in organ_indices for item in sublist]
+    organ_indices = list(set(organ_indices))
+    organ_names = [ind2organ[str(organ_index)] for organ_index in organ_indices]
+
+    organ_points_dict = {}
+    for i, organ_name in enumerate(organ_names):
+        points = organ2voxels[organ_name]
+        points = random.sample(points, int(len(points) / 250))
+        if organ_name not in organ_points_dict:
+            organ_points_dict[organ_name] = []
+        organ_points_dict[organ_name].extend(points)
+
+    organ_coords_dict = {}
+    organ_colors_dict = {}
+    for sample in tqdm(samples):
+        sentence_vector = torch.tensor(sample["vector"]).unsqueeze(0).to(device)
+        color = colors[
+            list(colors.keys())[np.array(sample["organ_indices"]).sum() + 10]
+        ]
+        label = "_".join(
+            [ind2organ[str(organ_ind)] for organ_ind in sample["organ_indices"]]
+        )
+        if label not in organ_coords_dict:
+            organ_coords_dict[label] = []
+            organ_colors_dict[label] = color
+        coordinates = model(sentence_vector).cpu().squeeze().numpy() * np.array(
+            VOXELMAN_CENTER
+        )
+        organ_coords_dict[label].append(coordinates.tolist())
+
+    """Perform PCA"""
+    all_points = []
+    for organ, organ_points in organ_points_dict.items():
+        all_points.extend(organ_points)
+
+    # Don't use the projected samples so that the transform is always constant
+    # for label, sample_points in organ_coords_dict.items():
+    #     all_points.extend(sample_points)
+
+    all_points = np.array(all_points)
+    pca = PCA(n_components=2)
+    pca_transform = pca.fit(all_points)
+
+    fig = plt.figure(figsize=(6, 6))
+    ax = fig.add_subplot(111)
+
+    for organ, points in organ_points_dict.items():
+        points = np.array(points)
+        points = pca_transform.transform(points)
+        ax.scatter(points[:, 0], points[:, 1], marker=".", alpha=0.125, label=organ)
+
+    for label, coordinates in organ_coords_dict.items():
+        coordinates = np.array(coordinates)
+        coordinates = pca_transform.transform(coordinates)
+        ax.scatter(
+            coordinates[:, 0],
+            coordinates[:, 1],
+            c=organ_colors_dict[label],
+            s=100,
+            marker="*",
+            edgecolor="k",
+            label=label,
+        )
+
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
+
+
+@torch.no_grad()
+def visualize_mappings_3D(
     samples: List,
     ind2organ: Dict,
     organ2voxels: Dict,
@@ -189,13 +274,16 @@ def embed_sample_sentences(samples_json_path: str):
 def test_loss_function(
     samples_json_path,
     organs_dir_path,
-    num_epochs=10,
-    batch_size=8,
-    learning_rate=1e-3,
-    weight_decay=0,
-    num_anchors=100,
-    voxel_temperature=1,
-    organ_temperature=1,
+    save_dir,
+    num_epochs,
+    batch_size,
+    learning_rate,
+    weight_decay,
+    num_anchors,
+    voxel_temperature,
+    organ_temperature,
+    visualize_every,
+    visualize_3D,
 ):
 
     # Check for CUDA
@@ -253,9 +341,26 @@ def test_loss_function(
                 # Update progress bar
                 pbar.update(1)
                 pbar.set_postfix({"Batch loss": loss.item()})
-        if not epoch % 20:
-            visualize_mappings(samples, ind2organ, organ2voxels, model, device)
-    plt.show()
+        
+        if visualize_every > 0 and not epoch % visualize_every:
+            if visualize_3D:
+                visualize_mappings_3D(samples, ind2organ, organ2voxels, model, device)
+            else:
+                visualize_mappings_2D(samples, ind2organ, organ2voxels, model, device)
+
+    if visualize_3D:
+        visualize_mappings_3D(samples, ind2organ, organ2voxels, model, device)
+    else:
+        visualize_mappings_2D(samples, ind2organ, organ2voxels, model, device)
+
+    if visualize_every < 0 and save_dir:
+        plt.savefig(
+            os.path.join(
+                save_dir, f"vtemp_{voxel_temperature}_otemp_{organ_temperature}.png"
+            )
+        )
+    else:
+        plt.show()
 
 
 def parse_args():
@@ -268,6 +373,9 @@ def parse_args():
     parser.add_argument(
         "--organs_dir_path", type=str, help="Path to the directory with organ info."
     )
+    parser.add_argument(
+        "--save_dir", type=str, default="", help="Directory where the figure is saved."
+    )
     parser.add_argument("--num_epochs", type=int, default=10, help="Number of epochs.")
     parser.add_argument("--batch_size", type=int, default=8, help="Batch size.")
     parser.add_argument(
@@ -277,7 +385,7 @@ def parse_args():
         "--weight_decay", type=float, default=0.0, help="Weight decay parameter."
     )
     parser.add_argument(
-        "--num_anchors", type=int, default=1, help="The number of anchor points to use."
+        "--num_anchors", type=int, default=100, help="The number of anchor points to use."
     )
     parser.add_argument(
         "--voxel_temperature", type=float, default=1.0, help="The voxel temperature."
@@ -285,6 +393,18 @@ def parse_args():
     parser.add_argument(
         "--organ_temperature", type=float, default=1.0, help="The organ temperature."
     )
+    parser.add_argument(
+        "--visualize_every",
+        type=int,
+        default=-1,
+        help="Number of epochs after which the visualization is made.",
+    )
+    parser.add_argument(
+        "--visualize_3D",
+        action="store_true",
+        help="Whether to visualize in 3D as opposed to the standard 2D visualization."
+    )
+
     return parser.parse_args()
 
 
@@ -293,6 +413,7 @@ def main():
     test_loss_function(
         args.samples_json_path,
         args.organs_dir_path,
+        args.save_dir,
         args.num_epochs,
         args.batch_size,
         args.learning_rate,
@@ -300,6 +421,8 @@ def main():
         args.num_anchors,
         args.voxel_temperature,
         args.organ_temperature,
+        args.visualize_every,
+        args.visualize_3D,
     )
 
 
