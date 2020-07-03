@@ -30,7 +30,6 @@ def visualize_mappings_2D(
     model,
     tokenizer,
     device: torch.device,
-    visualize_every: int = -1,
 ):
 
     organ2ind = dict(zip(ind2organ.values(), ind2organ.keys()))
@@ -194,7 +193,6 @@ def visualize_bert_mappings(
     save_path: str,
     bert_name: str,
     checkpoint_path: str,
-    visualize_every: int,
     visualize_3D: bool,
 ):
 
@@ -226,10 +224,9 @@ def visualize_bert_mappings(
             samples, ind2organ, organ2voxels, model, tokenizer, device
         )
 
-    if visualize_every < 0 and save_path:
+    if save_path:
         plt.savefig(os.path.join(save_path))
-    else:
-        plt.show()
+    plt.show()
 
 
 def parse_args():
@@ -262,12 +259,6 @@ def parse_args():
         help="Path to a pretrained checkpoint.",
     )
     parser.add_argument(
-        "--visualize_every",
-        type=int,
-        default=-1,
-        help="Number of epochs after which the visualization is made.",
-    )
-    parser.add_argument(
         "--visualize_3D",
         action="store_true",
         help="Whether to visualize in 3D as opposed to the standard 2D visualization.",
@@ -283,7 +274,6 @@ def main():
         args.save_path,
         args.bert_name,
         args.checkpoint_path,
-        args.visualize_every,
         args.visualize_3D,
     )
 
