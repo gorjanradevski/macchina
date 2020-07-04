@@ -1,19 +1,21 @@
 import argparse
+import json
+import os
+import random
+
+import numpy as np
 import torch
+from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import json
-import numpy as np
-from torch import nn
-import os
 from transformers import BertConfig, BertTokenizer
 
 from voxel_mapping.datasets import (
     VoxelSentenceMappingTestClassDataset,
     collate_pad_sentence_class_batch,
 )
-from voxel_mapping.models import ClassModel
 from voxel_mapping.evaluator import InferenceEvaluatorPerOrgan
+from voxel_mapping.models import ClassModel
 
 
 def inference(
@@ -22,6 +24,7 @@ def inference(
     voxelman_images_path: str,
     batch_size: int,
     bert_name: str,
+    random_organ_point: bool,
     checkpoint_path: str,
 ):
     # Check for CUDA
@@ -38,9 +41,7 @@ def inference(
         test_json_path, tokenizer, num_classes
     )
     test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        collate_fn=collate_pad_sentence_class_batch,
+        test_dataset, batch_size=batch_size, collate_fn=collate_pad_sentence_class_batch
     )
     config = BertConfig.from_pretrained(bert_name)
     model = nn.DataParallel(
@@ -51,7 +52,7 @@ def inference(
     model.train(False)
     # Create evaluator
     evaluator = InferenceEvaluatorPerOrgan(
-        ind2organ, organ2label, organ2voxels, voxelman_images_path, len(test_dataset),
+        ind2organ, organ2label, organ2voxels, voxelman_images_path, len(test_dataset)
     )
     with torch.no_grad():
         evaluator.reset_counters()
@@ -59,10 +60,18 @@ def inference(
             sentences, attn_mask = sentences.to(device), attn_mask.to(device)
             output_mappings = model(input_ids=sentences, attention_mask=attn_mask)
             y_pred = torch.argmax(output_mappings, dim=-1)
-            pred_centers = [organ2center[ind2organ[str(ind.item())]] for ind in y_pred]
-            for pred_center, organ_indices in zip(pred_centers, organs_indices):
+            if random_organ_point:
+                pred_points = [
+                    random.sample(organ2voxels[ind2organ[str(ind.item())]], 1)[0]
+                    for ind in y_pred
+                ]
+            else:
+                pred_points = [
+                    organ2center[ind2organ[str(ind.item())]] for ind in y_pred
+                ]
+            for pred_point, organ_indices in zip(pred_points, organs_indices):
                 evaluator.update_counters(
-                    np.array(pred_center), np.where(organ_indices == 1)[0]
+                    np.array(pred_point), np.where(organ_indices == 1)[0]
                 )
 
         print(
@@ -99,6 +108,7 @@ def main():
         args.voxelman_images_path,
         args.batch_size,
         args.bert_name,
+        args.random_organ_point,
         args.checkpoint_path,
     )
 
@@ -139,6 +149,11 @@ def parse_args():
         help="Should be one of [bert-base-uncased, allenai/scibert_scivocab_uncased,"
         "monologg/biobert_v1.1_pubmed, emilyalsentzer/Bio_ClinicalBERT,"
         "google/bert_uncased_L-8_H-512_A-8]",
+    )
+    parser.add_argument(
+        "--random_organ_point",
+        action="store_true",
+        help="Whether to take a random point in the organ as opposed to the center",
     )
     parser.add_argument(
         "--checkpoint_path",
