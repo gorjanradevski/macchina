@@ -1,19 +1,20 @@
 import argparse
-import torch
-from torch.utils.data import DataLoader
-from torch import nn
-from tqdm import tqdm
-import os
 import json
+import os
+
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 from transformers import BertConfig, BertTokenizer
 
+from utils.constants import VOXELMAN_CENTER
 from voxel_mapping.datasets import (
     VoxelSentenceMappingTestRegDataset,
     collate_pad_sentence_reg_test_batch,
 )
-from voxel_mapping.models import RegModel
 from voxel_mapping.evaluator import InferenceEvaluatorPerOrgan
-from utils.constants import VOXELMAN_CENTER
+from voxel_mapping.models import RegModel
 
 
 def inference(
@@ -48,7 +49,7 @@ def inference(
     organ2voxels = json.load(open(os.path.join(organs_dir_path, "organ2voxels.json")))
     # Create evaluator
     evaluator = InferenceEvaluatorPerOrgan(
-        ind2organ, organ2label, organ2voxels, voxelman_images_path, len(test_dataset),
+        ind2organ, organ2label, organ2voxels, voxelman_images_path, len(test_dataset)
     )
     center = torch.from_numpy(VOXELMAN_CENTER)
     with torch.no_grad():
