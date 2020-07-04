@@ -20,7 +20,7 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 from utils.constants import VOXELMAN_CENTER
-from voxel_mapping.losses import OrganDistanceLoss
+from voxel_mapping.losses import OrganDistanceLoss, BaselineRegLoss
 
 colors = mcolors.CSS4_COLORS
 logging.basicConfig(level=logging.INFO)
@@ -280,6 +280,7 @@ def test_loss_function(
     learning_rate,
     weight_decay,
     num_anchors,
+    loss_type,
     voxel_temperature,
     organ_temperature,
     visualize_every,
@@ -306,9 +307,17 @@ def test_loss_function(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay
     )
 
-    criterion = OrganDistanceLoss(
-        voxel_temperature=voxel_temperature, organ_temperature=organ_temperature
-    )
+    if loss_type == "organ_loss":
+        criterion = OrganDistanceLoss(
+            voxel_temperature=voxel_temperature, organ_temperature=organ_temperature
+        )
+        logging.warning("Using SSL loss!")
+    elif loss_type == "baseline_loss":
+        criterion = BaselineRegLoss()
+        logging.warning("Using baseline REG loss!")
+    else:
+        raise ValueError(f"Invalid loss type {loss_type}")
+
     logging.warning(f"Using {num_anchors} voxel points!")
     dataset = SentenceVectorDataset(samples, ind2organ, organ2voxels, num_anchors)
     dataloader = DataLoader(
@@ -332,7 +341,13 @@ def test_loss_function(
                 )
 
                 mappings = model(sentence_vectors)
-                loss = criterion(mappings, true_mappings, num_organs)
+
+                if loss_type == "organ_loss":
+                    loss = criterion(mappings, true_mappings, num_organs)
+                elif loss_type == "baseline_loss":
+                    loss = criterion(mappings, true_mappings)
+                else:
+                    raise ValueError(f"Invalid loss type: {loss_type}")
 
                 loss.backward()
 
@@ -356,7 +371,7 @@ def test_loss_function(
     if visualize_every < 0 and save_dir:
         plt.savefig(
             os.path.join(
-                save_dir, f"vtemp_{voxel_temperature}_otemp_{organ_temperature}.png"
+                save_dir, f"{loss_type}_vtemp_{voxel_temperature}_otemp_{organ_temperature}.png"
             )
         )
     else:
@@ -386,6 +401,9 @@ def parse_args():
     )
     parser.add_argument(
         "--num_anchors", type=int, default=100, help="The number of anchor points to use."
+    )
+    parser.add_argument(
+        "--loss_type", type=str, default="organ_loss", help="The loss type"
     )
     parser.add_argument(
         "--voxel_temperature", type=float, default=1.0, help="The voxel temperature."
@@ -419,6 +437,7 @@ def main():
         args.learning_rate,
         args.weight_decay,
         args.num_anchors,
+        args.loss_type,
         args.voxel_temperature,
         args.organ_temperature,
         args.visualize_every,
