@@ -38,14 +38,15 @@ def visualize_mappings_2D(
     organ_indices = [sample["organ_indices"] for sample in samples]
     organ_indices = [item for sublist in organ_indices for item in sublist]
     organ_indices = list(set(organ_indices))
+    organ_names = [ind2organ[str(organ_index)] for organ_index in organ_indices]
 
     organ_points_dict = {}
-    for i, organ_index in enumerate(organ_indices):
-        points = organ2voxels[organ]
+    for i, organ_name in enumerate(organ_names):
+        points = organ2voxels[organ_name]
         points = random.sample(points, int(len(points) / 250))
-        if ind2organ[str(organ_index)] not in organ_points_dict:
-            organ_points_dict[ind2organ[str(organ_index)]] = []
-        organ_points_dict[ind2organ[str(organ_index)]].extend(points)
+        if organ_name not in organ_points_dict:
+            organ_points_dict[organ_name] = []
+        organ_points_dict[organ_name].extend(points)
 
     organ_coords_dict = {}
     organ_colors_dict = {}
@@ -60,7 +61,9 @@ def visualize_mappings_2D(
             organ_colors_dict[label] = color
         encoded = torch.tensor(tokenizer.encode(sentence)).unsqueeze(0)
         attn_mask = torch.ones_like(encoded)
-        coordinates = model(encoded, attn_mask).cpu().numpy() * VOXELMAN_CENTER
+        coordinates = (
+            model(encoded, attn_mask).cpu().squeeze().numpy() * VOXELMAN_CENTER
+        )
         organ_coords_dict[label].append(coordinates.tolist())
 
     """Perform PCA"""
