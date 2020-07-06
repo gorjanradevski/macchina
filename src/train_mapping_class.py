@@ -35,6 +35,7 @@ def train(
     learning_rate: float,
     weight_decay: float,
     masking: bool,
+    use_occurrences: bool,
     clip_val: float,
 ):
     # Set up logging
@@ -53,8 +54,15 @@ def train(
     # Prepare datasets
     tokenizer = BertTokenizer.from_pretrained(bert_name)
     logging.warning(f"The masking is set to: ---{masking}---")
+    logging.warning(
+        f"Usage of occurrences instead of ground truth is set to: ---{use_occurrences}---"
+    )
     train_dataset = VoxelSentenceMappingTrainClassDataset(
-        train_json_path, tokenizer, num_classes, masking
+        train_json_path,
+        tokenizer,
+        num_classes,
+        masking=masking,
+        use_occurrences=use_occurrences,
     )
     val_dataset = VoxelSentenceMappingTestClassDataset(
         val_json_path, tokenizer, num_classes
@@ -66,7 +74,7 @@ def train(
         collate_fn=collate_pad_sentence_class_batch,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, collate_fn=collate_pad_sentence_class_batch,
+        val_dataset, batch_size=batch_size, collate_fn=collate_pad_sentence_class_batch
     )
     config = BertConfig.from_pretrained(bert_name)
     # Prepare model
@@ -205,6 +213,7 @@ def main():
         args.learning_rate,
         args.weight_decay,
         args.masking,
+        args.use_occurrences,
         args.clip_val,
     )
 
@@ -255,6 +264,11 @@ def parse_args():
         "--batch_size", type=int, default=128, help="The size of the batch."
     )
     parser.add_argument("--masking", action="store_true", help="Whether to use masking")
+    parser.add_argument(
+        "--use_occurrences",
+        action="store_true",
+        help="Whether to use organ occurrences as labels instead of ground truth.",
+    )
     parser.add_argument(
         "--learning_rate", type=float, default=2e-5, help="The learning rate."
     )
