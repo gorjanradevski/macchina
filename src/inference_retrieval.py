@@ -36,7 +36,14 @@ def inference(
     model = nn.DataParallel(
         model_factory(model_name, bert_name, config, project_size)
     ).to(device)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    assert (
+        model.module.bert.embeddings.word_embeddings.num_embeddings
+        == tokenizer.vocab_size
+    )
+    if checkpoint_path:
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    else:
+        print(f"Not loading from checkpoint! Inference from {bert_name}")
     model.train(False)
     # Get voxelman center
     center = torch.from_numpy(VOXELMAN_CENTER)
@@ -44,9 +51,10 @@ def inference(
     with torch.no_grad():
         for sentences, attn_mask, organs_indices, docs_ids in tqdm(test_loader):
             sentences, attn_mask = sentences.to(device), attn_mask.to(device)
-            output_mappings = (
-                model(input_ids=sentences, attention_mask=attn_mask).cpu() * center
-            )
+            output_mappings = model(input_ids=sentences, attention_mask=attn_mask).cpu()
+            if model_name == "reg_model":
+                # The reg_model normalizes the embeddings between -1 and 1
+                output_mappings *= center
             for output_mapping, organ_indices, doc_id in zip(
                 output_mappings, organs_indices, docs_ids
             ):
@@ -57,6 +65,7 @@ def inference(
                 )
 
     recalls = {"1": 0, "5": 0, "10": 0}
+    precisions = {"1": 0, "5": 0, "10": 0}
     for document1 in tqdm(embedded_docs):
         cur_doc_distances = []
         for document2 in embedded_docs:
@@ -72,9 +81,22 @@ def inference(
                     if (cur_doc[0] == document1.organ_indices).all():
                         recalls[k] += 1
                         break
+        for k in precisions.keys():
+            for cur_doc in cur_doc_distances_sorted[: int(k)]:
+                cur_precision = 0
+                if cur_doc[0].shape == document1.organ_indices.shape:
+                    if (cur_doc[0] == document1.organ_indices).all():
+                        cur_precision += 1
+            cur_precision /= int(k)
+            precisions[k] += cur_precision
 
     for k, recall in recalls.items():
         print(f"The recall at {k} is: {round(recall/len(embedded_docs) * 100, 1)}")
+
+    for k, precision in precisions.items():
+        print(
+            f"The precision at {k} is: {round(precision/len(embedded_docs) * 100, 1)}"
+        )
 
 
 def main():
@@ -107,15 +129,13 @@ def parse_args():
         "--model_name", type=str, default="reg_model", help="The model name."
     )
     parser.add_argument(
-        "--batch_size", type=int, default=128, help="The size of the batch."
+        "--batch_size", type=int, default=64, help="The size of the batch."
     )
     parser.add_argument(
         "--bert_name",
         type=str,
         default="bert-base-uncased",
-        help="Should be one of [bert-base-uncased, allenai/scibert_scivocab_uncased,"
-        "monologg/biobert_v1.1_pubmed, emilyalsentzer/Bio_ClinicalBERT,"
-        "google/bert_uncased_L-4_H-512_A-8]",
+        help="The pre-trained Bert model.",
     )
     parser.add_argument(
         "--checkpoint_path",

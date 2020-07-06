@@ -96,7 +96,6 @@ def train(
         # Set model in evaluation mode
         model.train(False)
         embedded_docs = []
-        total_recall = 0
         with torch.no_grad():
             for sentences, attn_mask, organs_indices, docs_ids in tqdm(val_loader):
                 sentences, attn_mask = sentences.to(device), attn_mask.to(device)
@@ -115,6 +114,7 @@ def train(
                     )
 
         recalls = {"1": 0, "5": 0, "10": 0}
+        total_recall = 0
         for document1 in tqdm(embedded_docs):
             cur_doc_distances = []
             for document2 in embedded_docs:
@@ -137,7 +137,7 @@ def train(
                 f"The recall at {k} is: {round(recall / len(embedded_docs) * 100, 1)}"
             )
 
-        if total_recall > best_recall:
+        if total_recall >= best_recall:
             print("===================================")
             print(f"Found new best on epoch {epoch+1}. Saving model!!!")
             print("===================================")
@@ -212,7 +212,7 @@ def parse_args():
         "--batch_size", type=int, default=16, help="The size of the batch."
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=5e-5, help="The learning rate."
+        "--learning_rate", type=float, default=1e-5, help="The learning rate."
     )
     parser.add_argument(
         "--clip_val", type=float, default=2.0, help="The clipping threshold."
@@ -224,9 +224,7 @@ def parse_args():
         "--bert_name",
         type=str,
         default="bert-base-uncased",
-        help="Should be one of [bert-base-uncased, allenai/scibert_scivocab_uncased,"
-        "monologg/biobert_v1.1_pubmed, emilyalsentzer/Bio_ClinicalBERT,"
-        "google/bert_uncased_L-4_H-512_A-8]",
+        help="The pre-trained Bert model.",
     )
     parser.add_argument(
         "--weight_decay", type=float, default=0.01, help="The (default) weight decay."

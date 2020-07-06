@@ -9,6 +9,7 @@ import sys
 import os
 import logging
 import numpy as np
+import random
 from transformers import BertConfig, BertTokenizer
 
 from voxel_mapping.datasets import (
@@ -47,7 +48,6 @@ def train(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Prepare jsons
     ind2organ = json.load(open(os.path.join(organs_dir_path, "ind2organ.json")))
-    organ2center = json.load(open(os.path.join(organs_dir_path, "organ2center.json")))
     organ2label = json.load(open(os.path.join(organs_dir_path, "organ2label.json")))
     organ2summary = json.load(open(os.path.join(organs_dir_path, "organ2summary.json")))
     num_classes = max([int(index) for index in ind2organ.keys()]) + 1
@@ -146,9 +146,9 @@ def train(
                 sentences, attn_mask = sentences.to(device), attn_mask.to(device)
                 output_mappings = model(input_ids=sentences, attention_mask=attn_mask)
                 y_pred = torch.argmax(output_mappings, dim=-1)
-                pred_organ_names = [ind2organ[str(ind.item())] for ind in y_pred]
                 pred_centers = [
-                    organ2center[organ_name] for organ_name in pred_organ_names
+                    random.sample(organ2summary[ind2organ[str(ind.item())]], 1)[0]
+                    for ind in y_pred
                 ]
                 for pred_center, organ_indices in zip(pred_centers, organs_indices):
                     evaluator.update_counters(
@@ -270,7 +270,7 @@ def parse_args():
         help="Whether to use organ occurrences as labels instead of ground truth.",
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=2e-5, help="The learning rate."
+        "--learning_rate", type=float, default=1e-5, help="The learning rate."
     )
     parser.add_argument(
         "--clip_val", type=float, default=2.0, help="The clipping threshold."
@@ -279,9 +279,7 @@ def parse_args():
         "--bert_name",
         type=str,
         default="bert-base-uncased",
-        help="Should be one of [bert-base-uncased, allenai/scibert_scivocab_uncased,"
-        "monologg/biobert_v1.1_pubmed, emilyalsentzer/Bio_ClinicalBERT,"
-        "google/bert_uncased_L-4_H-512_A-8]",
+        help="The pre-trained Bert model.",
     )
     parser.add_argument(
         "--weight_decay", type=float, default=0.01, help="The (default) weight decay."

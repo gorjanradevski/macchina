@@ -299,7 +299,7 @@ def parse_args():
     parser.add_argument(
         "--epochs",
         type=int,
-        default=20,
+        default=15,
         help="The number of epochs to train the model.",
     )
     parser.add_argument(
@@ -332,9 +332,7 @@ def parse_args():
         "--bert_name",
         type=str,
         default="bert-base-uncased",
-        help="Should be one of [bert-base-uncased, allenai/scibert_scivocab_uncased,"
-        "monologg/biobert_v1.1_pubmed, emilyalsentzer/Bio_ClinicalBERT,"
-        "google/bert_uncased_L-4_H-512_A-8]",
+        help="The pre-trained Bert model.",
     )
     parser.add_argument(
         "--checkpoint_path",
