@@ -29,10 +29,10 @@ class VoxelSentenceMappingTrainRegDataset(VoxelSentenceMappingRegDataset, Datase
         ind2organ: Dict[int, str],
         organ2voxels: str,
         num_anchors: int,
-        masking: bool,
+        masking: bool = False,
     ):
         super().__init__(json_path, tokenizer)
-        self.organ_names = [element["organ_names"] for element in self.json_data]
+        self.keywords = [element["keywords"] for element in self.json_data]
         self.masking = masking
         self.detokenizer = TreebankWordDetokenizer()
         self.num_anchors = num_anchors
@@ -47,7 +47,7 @@ class VoxelSentenceMappingTrainRegDataset(VoxelSentenceMappingRegDataset, Datase
         if self.masking:
             mask = {
                 word: torch.bernoulli(torch.tensor([0.5])).bool().item()
-                for word in self.organ_names[idx]
+                for word in self.keywords[idx]
             }
             sentence = self.detokenizer.detokenize(
                 [
@@ -135,7 +135,7 @@ class VoxelSentenceMappingClassDataset:
 
 class VoxelSentenceMappingTrainClassDataset(VoxelSentenceMappingClassDataset, Dataset):
     def __init__(
-        self, json_path: str, tokenizer: BertTokenizer, num_classes: int, masking: bool,
+        self, json_path: str, tokenizer: BertTokenizer, num_classes: int, masking: bool
     ):
         super().__init__(json_path, tokenizer, num_classes)
         self.masking = masking
