@@ -11,13 +11,17 @@ from utils.constants import VOXELMAN_CENTER
 
 
 class VoxelSentenceMappingRegDataset:
-    def __init__(self, json_path: str, tokenizer: str):
+    def __init__(self, json_path: str, tokenizer: str, use_occurrences: bool = False):
         self.json_data = json.load(open(json_path))
         self.tokenizer = tokenizer
+        self.use_occurrences = use_occurrences
         self.sentences, self.organ_indices = [], []
         for element in tqdm(self.json_data):
             self.sentences.append(element["text"])
-            self.organ_indices.append(element["organ_indices"])
+            if self.use_occurrences:
+                self.organ_indices.append(element["occ_organ_indices"])
+            else:
+                self.organ_indices.append(element["organ_indices"])
         self.center = torch.from_numpy(VOXELMAN_CENTER)
 
 
@@ -30,14 +34,15 @@ class VoxelSentenceMappingTrainRegDataset(VoxelSentenceMappingRegDataset, Datase
         organ2voxels: str,
         num_anchors: int,
         masking: bool = False,
+        use_occurrences: bool = False,
     ):
-        super().__init__(json_path, tokenizer)
-        self.keywords = [element["keywords"] for element in self.json_data]
+        super().__init__(json_path, tokenizer, use_occurrences)
         self.masking = masking
         self.detokenizer = TreebankWordDetokenizer()
         self.num_anchors = num_anchors
         self.organ2voxels = organ2voxels
         self.ind2organ = ind2organ
+        self.keywords = [element["keywords"] for element in self.json_data]
 
     def __len__(self):
         return len(self.sentences)
