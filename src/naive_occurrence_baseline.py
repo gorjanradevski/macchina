@@ -48,7 +48,8 @@ def occurrence_evaluation_complex(
 
         if occ_organs:
             pred_organ = random.sample(occ_organs, 1)[0]
-            pred = np.array(random.sample(organ2voxels[pred_organ], 1))[0]
+            # pred = np.array(random.sample(organ2voxels[pred_organ], 1))[0]
+            pred = np.array(organ2center[pred_organ])
         else:
             pred = np.array([0.0, 0.0, 0.0])
 
