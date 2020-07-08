@@ -1053,6 +1053,23 @@ version = "1.5.0"
 
 [[package]]
 category = "main"
+description = "Sentence Embeddings using BERT / RoBERTa / XLNet"
+name = "sentence-transformers"
+optional = false
+python-versions = "*"
+version = "0.2.6.2"
+
+[package.dependencies]
+nltk = "*"
+numpy = "*"
+scikit-learn = "*"
+scipy = "*"
+torch = ">=1.0.1"
+tqdm = "*"
+transformers = "2.11.0"
+
+[[package]]
+category = "main"
 description = "SentencePiece python wrapper"
 name = "sentencepiece"
 optional = false
@@ -1374,7 +1391,7 @@ python-versions = "*"
 version = "1.12.1"
 
 [metadata]
-content-hash = "b460ab6e8da3909ffb99efafd3f3e583c43fcebdac010a7b2e5992fe2bdf3103"
+content-hash = "13a4a12491a32163d19e38a75c2873eecf8b5551653cbdc4f78e0b0070af6b53"
 python-versions = "^3.8"
 
 [metadata.files]
@@ -1990,6 +2007,9 @@ scipy = [
 send2trash = [
     {file = "Send2Trash-1.5.0-py3-none-any.whl", hash = "sha256:f1691922577b6fa12821234aeb57599d887c4900b9ca537948d2dac34aea888b"},
     {file = "Send2Trash-1.5.0.tar.gz", hash = "sha256:60001cc07d707fe247c94f74ca6ac0d3255aabcb930529690897ca2a39db28b2"},
+]
+sentence-transformers = [
+    {file = "sentence-transformers-0.2.6.2.tar.gz", hash = "sha256:6b41126a40d9cd9b01aa231742cd4f260c5508173e90095b63139bd104ff02f7"},
 ]
 sentencepiece = [
     {file = "sentencepiece-0.1.92-cp27-cp27m-macosx_10_6_x86_64.whl", hash = "sha256:366cd4e01e723075786f0383d6b153965c09567ced96618dc2a3be2ca7353d5a"},
