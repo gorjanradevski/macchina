@@ -8,8 +8,9 @@ import natsort
 import numpy as np
 import tifffile
 from scipy.ndimage import binary_erosion, generate_binary_structure
-from skimage.measure import label
+from scipy.spatial import ConvexHull
 
+from skimage.measure import label
 from utils.constants import VOXELMAN_CENTER
 
 
@@ -95,6 +96,37 @@ def get_organ2summary(organ2voxels: str, num_anchors: int = 1000):
     return organ2summary
 
 
+def organ_density(points) -> float:
+    points = np.array(points)
+    hull = ConvexHull(points)
+    return len(points) / hull.volume
+
+
+def merge_organs(
+    organ_names: list, organ2voxels: list, downweigh_dense: bool = False
+) -> list:
+
+    organ_point_counts = []
+    densities = []
+    for organ in organ_names:
+        organ_point_counts.append(len(organ2voxels[organ]))
+        densities.append(organ_density(organ2voxels[organ]))
+    smallest_point_count = min(organ_point_counts)
+
+    densities = np.array(densities)
+    inverse_densities = (densities.sum() - densities) / densities.sum()
+
+    voxels = []
+    for i, organ in enumerate(organ_names):
+        organ_voxels = random.sample(organ2voxels[organ], smallest_point_count)
+        if downweigh_dense:
+            organ_voxels = random.sample(
+                organ_voxels, int(inverse_densities[i] * len(organ_voxels))
+            )
+        voxels.extend(organ_voxels)
+    return voxels
+
+
 def merge_organ_groups(
     src_dir,
     dst_dir,
@@ -133,22 +165,24 @@ def merge_organ_groups(
 
         aliases = []
         labels = []
-        voxels = []
+        # voxels = []
 
-        organ_point_counts = []
-        for organ_to_merge in organs_to_merge:
-            organ_point_counts.append(len(organ2voxels[organ_to_merge]))
-        smallest_point_count = min(organ_point_counts)
+        # organ_point_counts = []
+        # for organ_to_merge in organs_to_merge:
+        #     organ_point_counts.append(len(organ2voxels[organ_to_merge]))
+        # smallest_point_count = min(organ_point_counts)
 
-        for organ_to_merge in organs_to_merge:
-            aliases = aliases + organ2alias[organ_to_merge]
-            labels = labels + organ2label[organ_to_merge]
-            if len(organ2voxels[organ_to_merge]) > smallest_point_count:
-                voxels = voxels + random.sample(
-                    organ2voxels[organ_to_merge], smallest_point_count
-                )
-            else:
-                voxels = voxels + organ2voxels[organ_to_merge]
+        # for organ_to_merge in organs_to_merge:
+        #     aliases = aliases + organ2alias[organ_to_merge]
+        #     labels = labels + organ2label[organ_to_merge]
+        #     if len(organ2voxels[organ_to_merge]) > smallest_point_count:
+        #         voxels = voxels + random.sample(
+        #             organ2voxels[organ_to_merge], smallest_point_count
+        #         )
+        #     else:
+        #         voxels = voxels + organ2voxels[organ_to_merge]
+
+        voxels = merge_organs(organs_to_merge, organ2voxels, downweigh_dense=True)
 
         organ2alias[superorgan_name] = aliases
         organ2label[superorgan_name] = labels
