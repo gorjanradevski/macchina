@@ -29,8 +29,14 @@ def visualize_mappings_2D(
     organ2voxels: Dict,
     model,
     tokenizer,
+    organ_colors: List,
+    sample_colors: List,
+    sample_markers: List,
     device: torch.device,
 ):
+    print(organ_colors)
+    print(sample_colors)
+    print(sample_markers)
 
     organ2ind = dict(zip(ind2organ.values(), ind2organ.keys()))
     for organ, ind in organ2ind.items():
@@ -50,15 +56,18 @@ def visualize_mappings_2D(
 
     organ_coords_dict = {}
     organ_colors_dict = {}
+    organ_markers_dict = {}
     for sample in tqdm(samples):
         sentence = sample["text"]
-        color = colors[list(colors.keys())[np.array(sample["organ_indices"]).sum()]]
         label = ", ".join(
             [ind2organ[str(organ_ind)] for organ_ind in sample["organ_indices"]]
         )
         if label not in organ_coords_dict:
             organ_coords_dict[label] = []
-            organ_colors_dict[label] = color
+            organ_colors_dict[label] = sample_colors[0]
+            organ_markers_dict[label] = sample_markers[0]
+            sample_colors.remove(sample_colors[0])
+            sample_markers.remove(sample_markers[0])
         encoded = torch.tensor(tokenizer.encode(sentence)).unsqueeze(0)
         attn_mask = torch.ones_like(encoded)
         coordinates = (
@@ -95,7 +104,7 @@ def visualize_mappings_2D(
             coordinates[:, 1],
             c=organ_colors_dict[label],
             s=100,
-            marker="*",
+            marker=organ_markers_dict[label],
             edgecolor="k",
             label=label,
         )
@@ -104,7 +113,7 @@ def visualize_mappings_2D(
     ax.set_yticklabels([])
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    plt.legend(by_label.values(), by_label.keys())
+    plt.legend(by_label.values(), by_label.keys(), fontsize="xx-large")
 
 
 @torch.no_grad()
@@ -114,6 +123,9 @@ def visualize_mappings_3D(
     organ2voxels: Dict,
     model,
     tokenizer,
+    organ_colors: List,
+    sample_colors: List,
+    sample_markers: List,
     device: torch.device,
 ):
 
@@ -127,7 +139,6 @@ def visualize_mappings_3D(
     maxes = np.array([[0, 0, 0]])
     mins = np.array([[0, 0, 0]])
     for i, organ_index in enumerate(organ_indices):
-        color = colors[list(colors.keys())[organ_index + len(ind2organ)]]
         points = np.array(organ2voxels[ind2organ[str(organ_index)]])
 
         # To determine axis bounds
@@ -147,17 +158,25 @@ def visualize_mappings_3D(
                 for s in faces
             ]
         )
-        ax.add_collection3d(Poly3DCollection(organ_hull, alpha=0.05, color=color))
+        ax.add_collection3d(
+            Poly3DCollection(organ_hull, alpha=0.05, color=organ_colors[i])
+        )
 
     organ_coords_dict = {}
+    organ_colors_dict = {}
+    organ_markers_dict = {}
     for sample in tqdm(samples):
         sentence = sample["text"]
-        color = colors[list(colors.keys())[np.array(sample["organ_indices"]).sum()]]
         label = ", ".join(
             [ind2organ[str(organ_ind)] for organ_ind in sample["organ_indices"]]
         )
         if label not in organ_coords_dict:
             organ_coords_dict[label] = []
+            organ_colors_dict[label] = sample_colors[0]
+            organ_markers_dict[label] = sample_markers[0]
+            sample_colors.remove(sample_colors[0])
+            sample_markers.remove(sample_markers[0])
+
         encoded = torch.tensor(tokenizer.encode(sentence)).unsqueeze(0)
         attn_mask = torch.ones_like(encoded)
         coordinates = model(encoded, attn_mask).cpu().numpy() * VOXELMAN_CENTER
@@ -166,9 +185,9 @@ def visualize_mappings_3D(
             coordinates[:, 0],
             coordinates[:, 1],
             coordinates[:, 2],
-            c=color,
-            s=100,
-            marker="*",
+            c=organ_colors_dict[label],
+            s=50,
+            marker=organ_markers_dict[label],
             edgecolor="k",
             label=label,
         )
@@ -187,8 +206,8 @@ def visualize_mappings_3D(
     ax.set_zticklabels([])
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    plt.legend(by_label.values(), by_label.keys())
-    plt.axis("off")
+    plt.legend(by_label.values(), by_label.keys(), fontsize="xx-large")
+    # plt.axis("off")
 
 
 def visualize_bert_mappings(
@@ -198,6 +217,9 @@ def visualize_bert_mappings(
     bert_name: str,
     checkpoint_path: str,
     visualize_3D: bool,
+    organ_colors: List,
+    sample_colors: List,
+    sample_markers: List,
 ):
 
     # Check for CUDA
@@ -221,11 +243,27 @@ def visualize_bert_mappings(
 
     if visualize_3D:
         visualize_mappings_3D(
-            samples, ind2organ, organ2voxels, model, tokenizer, device
+            samples,
+            ind2organ,
+            organ2voxels,
+            model,
+            tokenizer,
+            organ_colors,
+            sample_colors,
+            sample_markers,
+            device,
         )
     else:
         visualize_mappings_2D(
-            samples, ind2organ, organ2voxels, model, tokenizer, device
+            samples,
+            ind2organ,
+            organ2voxels,
+            model,
+            tokenizer,
+            organ_colors,
+            sample_colors,
+            sample_markers,
+            device,
         )
 
     if save_path:
@@ -265,6 +303,28 @@ def parse_args():
         action="store_true",
         help="Whether to visualize in 3D as opposed to the standard 2D visualization.",
     )
+    parser.add_argument(
+        "-oc",
+        "--organ_colors",
+        type=str,
+        action="append",
+        help="List of names of colors for organs.",
+    )
+    parser.add_argument(
+        "-sc",
+        "--sample_colors",
+        type=str,
+        action="append",
+        help="List of names of colors for samples.",
+    )
+    parser.add_argument(
+        "-sm",
+        "--sample_markers",
+        type=str,
+        action="append",
+        help="List of symbols for markers.",
+    )
+
     return parser.parse_args()
 
 
@@ -277,6 +337,9 @@ def main():
         args.bert_name,
         args.checkpoint_path,
         args.visualize_3D,
+        args.organ_colors,
+        args.sample_colors,
+        args.sample_markers,
     )
 
 

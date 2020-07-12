@@ -164,13 +164,15 @@ def remove_names_and_indices(samples, organs_to_remove, organ2ind):
         ]
         sample["organ_indices"] = [organ2ind[organ] for organ in sample["organ_names"]]
         sample["occ_organ_indices"] = [
-            organ2ind[organ] for organ in sample["occ_organ_indices"]
+            organ2ind[organ] for organ in sample["occ_organ_names"]
         ]
 
     return samples
 
 
-def remove_dataset_organs(src_dset, dst_dset, organs_dir, organs_to_remove):
+def remove_dataset_organs(
+    src_dset, dst_dset, organs_dir, organs_to_remove, redo_occurrences
+):
 
     organ2ind = json.load(open(os.path.join(organs_dir, "organ2ind.json")))
     organ2alias = json.load(open(os.path.join(organs_dir, "organ2alias.json")))
@@ -193,10 +195,10 @@ def remove_dataset_organs(src_dset, dst_dset, organs_dir, organs_to_remove):
     samples = remove_names_and_indices(samples, organs_to_remove, organ2ind)
     samples = [sample for sample in samples if sample["organ_names"]]
 
-    for sample in tqdm(samples):
-        sample["keywords"] = detect_occurrences(sample["text"], new_aliases)
-
-    samples = fix_keyword_detection_issues(samples, organ2ind)
+    if redo_occurrences:
+        for sample in tqdm(samples):
+            sample["keywords"] = detect_occurrences(sample["text"], new_aliases)
+        samples = fix_keyword_detection_issues(samples, organ2ind)
 
     with open(dst_dset, "w") as outfile:
         json.dump(samples, outfile)
@@ -221,6 +223,11 @@ def parse_args():
         action="append",
         help="A set of organ names that will be removed",
     )
+    parser.add_argument(
+        "--redo_occurrences",
+        action="store_true",
+        help="Whether to recompute the keywords.",
+    )
 
     return parser.parse_args()
 
@@ -228,7 +235,11 @@ def parse_args():
 def main():
     args = parse_args()
     remove_dataset_organs(
-        args.src_dset, args.dst_dset, args.organs_dir, args.organs_to_remove
+        args.src_dset,
+        args.dst_dset,
+        args.organs_dir,
+        args.organs_to_remove,
+        args.redo_occurrences,
     )
 
 
