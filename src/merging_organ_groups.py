@@ -7,11 +7,12 @@ from typing import List
 import natsort
 import numpy as np
 import tifffile
-from scipy.ndimage import binary_erosion, generate_binary_structure
+
+# from scipy.ndimage import binary_erosion, generate_binary_structure
 from scipy.spatial import ConvexHull
 
-from skimage.measure import label
-from utils.constants import VOXELMAN_CENTER
+# from skimage.measure import label
+# from utils.constants import VOXELMAN_CENTER
 
 
 def get_images(folder, extension):
@@ -43,43 +44,43 @@ def read_images(folder, extension=".tif"):
     return images
 
 
-def getLargestCC(points):
-    labels = label(points)
-    assert labels.max() != 0, "No connected regions"
-    largestCC = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
-    return np.where(largestCC == True)  # noqa: E712
+# def getLargestCC(points):
+#     labels = label(points)
+#     assert labels.max() != 0, "No connected regions"
+#     largestCC = labels == np.argmax(np.bincount(labels.flat)[1:]) + 1
+#     return np.where(largestCC == True)  # noqa: E712
 
 
-def get_center_of_mass(labels, images_path):
+# def get_center_of_mass(labels, images_path):
 
-    images_in = read_images(images_path, extension=".tif")
+#     images_in = read_images(images_path, extension=".tif")
 
-    images = np.zeros(images_in.shape, dtype=int)
-    for _label in labels:
-        images[images_in == _label] = 1
+#     images = np.zeros(images_in.shape, dtype=int)
+#     for _label in labels:
+#         images[images_in == _label] = 1
 
-    erosion_mask = generate_binary_structure(3, 1)
-    i = 0
-    while True:
-        last_points = np.where(images != 0)
-        images = binary_erosion(images, erosion_mask).astype(int)
-        i += 1
-        if not images.sum():
-            print(f"Eroded all voxels after {i} erosions")
-            break
-    images[last_points] = 1
-    last_points = getLargestCC(images)
-    mass_center = np.array(last_points).transpose().mean(axis=0)
-    mass_center = mass_center - VOXELMAN_CENTER
-    return mass_center.tolist()
+#     erosion_mask = generate_binary_structure(3, 1)
+#     i = 0
+#     while True:
+#         last_points = np.where(images != 0)
+#         images = binary_erosion(images, erosion_mask).astype(int)
+#         i += 1
+#         if not images.sum():
+#             print(f"Eroded all voxels after {i} erosions")
+#             break
+#     images[last_points] = 1
+#     last_points = getLargestCC(images)
+#     mass_center = np.array(last_points).transpose().mean(axis=0)
+#     mass_center = mass_center - VOXELMAN_CENTER
+#     return mass_center.tolist()
 
 
-def point_within_organ(point, labels, images_path):
-    images = read_images(images_path, extension=".tif")
-    point = np.round(point + VOXELMAN_CENTER)
-    x, y, z = point.astype(int)
-    correct = int(images[x, y, z] in labels)
-    return correct
+# def point_within_organ(point, labels, images_path):
+#     images = read_images(images_path, extension=".tif")
+#     point = np.round(point + VOXELMAN_CENTER)
+#     x, y, z = point.astype(int)
+#     correct = int(images[x, y, z] in labels)
+#     return correct
 
 
 def get_organ2summary(organ2voxels: str, num_anchors: int = 1000):
@@ -151,7 +152,7 @@ def merge_organ_groups(
     organ2ind = json.load(open(os.path.join(src_dir, "organ2ind.json")))
     organ2label = json.load(open(os.path.join(src_dir, "organ2label.json")))
     organ2alias = json.load(open(os.path.join(src_dir, "organ2alias.json")))
-    organ2center = json.load(open(os.path.join(src_dir, "organ2center.json")))
+    # organ2center = json.load(open(os.path.join(src_dir, "organ2center.json")))
     organ2voxels = json.load(open(os.path.join(src_dir, "organ2voxels.json")))
 
     for organs_to_merge, superorgan_name, superorgan_index in zip(
@@ -187,23 +188,23 @@ def merge_organ_groups(
         organ2alias[superorgan_name] = aliases
         organ2label[superorgan_name] = labels
         organ2voxels[superorgan_name] = voxels
-        organ2center[superorgan_name] = get_center_of_mass(
-            organ2label[superorgan_name], images_path
-        )
+        # organ2center[superorgan_name] = get_center_of_mass(
+        #     organ2label[superorgan_name], images_path
+        # )
 
-        if point_within_organ(
-            organ2center[superorgan_name], organ2label[superorgan_name], images_path
-        ):
-            print("Center of mass is inside merged organ")
-        else:
-            print("Center of mass is not inside merged organ, that is an error")
+        # if point_within_organ(
+        #     organ2center[superorgan_name], organ2label[superorgan_name], images_path
+        # ):
+        #     print("Center of mass is inside merged organ")
+        # else:
+        #     print("Center of mass is not inside merged organ, that is an error")
 
         for organ_to_merge in organs_to_merge:
             del ind2organ[str(organ2ind[organ_to_merge])]
             del organ2ind[organ_to_merge]
             del organ2label[organ_to_merge]
             del organ2alias[organ_to_merge]
-            del organ2center[organ_to_merge]
+            # del organ2center[organ_to_merge]
             del organ2voxels[organ_to_merge]
 
     organ2summary = get_organ2summary(organ2voxels, num_anchors=1000)
@@ -212,7 +213,7 @@ def merge_organ_groups(
     json.dump(organ2ind, open(os.path.join(dst_dir, "organ2ind.json"), "w"))
     json.dump(organ2label, open(os.path.join(dst_dir, "organ2label.json"), "w"))
     json.dump(organ2alias, open(os.path.join(dst_dir, "organ2alias.json"), "w"))
-    json.dump(organ2center, open(os.path.join(dst_dir, "organ2center.json"), "w"))
+    # json.dump(organ2center, open(os.path.join(dst_dir, "organ2center.json"), "w"))
     json.dump(organ2voxels, open(os.path.join(dst_dir, "organ2voxels.json"), "w"))
     json.dump(organ2summary, open(os.path.join(dst_dir, "organ2summary.json"), "w"))
 
