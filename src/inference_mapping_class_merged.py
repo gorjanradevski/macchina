@@ -127,7 +127,7 @@ def main():
     inference(
         args.test_json_path,
         args.organs_dir_path,
-        args.organ_dir_merged_path,
+        args.organs_dir_merged_path,
         args.voxelman_images_path,
         args.batch_size,
         args.bert_name,
