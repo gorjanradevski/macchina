@@ -166,22 +166,10 @@ def merge_organ_groups(
 
         aliases = []
         labels = []
-        # voxels = []
 
-        # organ_point_counts = []
-        # for organ_to_merge in organs_to_merge:
-        #     organ_point_counts.append(len(organ2voxels[organ_to_merge]))
-        # smallest_point_count = min(organ_point_counts)
-
-        # for organ_to_merge in organs_to_merge:
-        #     aliases = aliases + organ2alias[organ_to_merge]
-        #     labels = labels + organ2label[organ_to_merge]
-        #     if len(organ2voxels[organ_to_merge]) > smallest_point_count:
-        #         voxels = voxels + random.sample(
-        #             organ2voxels[organ_to_merge], smallest_point_count
-        #         )
-        #     else:
-        #         voxels = voxels + organ2voxels[organ_to_merge]
+        for organ_to_merge in organs_to_merge:
+            aliases = aliases + organ2alias[organ_to_merge]
+            labels = labels + organ2label[organ_to_merge]
 
         voxels = merge_organs(organs_to_merge, organ2voxels, downweigh_dense=True)
 
