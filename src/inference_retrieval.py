@@ -1,17 +1,19 @@
 import argparse
+
+import numpy as np
 import torch
-from torch.utils.data import DataLoader
 from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import BertConfig, BertTokenizer
 
+from utils.constants import VOXELMAN_CENTER
 from voxel_mapping.datasets import (
     VoxelSentenceMappingTestRegDataset,
     collate_pad_sentence_reg_test_batch,
 )
 from voxel_mapping.models import model_factory
 from voxel_mapping.retrieval_utils import EmbeddedDoc
-from utils.constants import VOXELMAN_CENTER
 
 
 def inference(
@@ -96,7 +98,11 @@ def inference(
             precisions[k] += cur_precision
 
     for k, recall in recalls.items():
-        print(f"The recall at {k} is: {round(sum(recall)/len(recall) * 100, 1)} +/ {}")
+        recall = np.array(recall)
+        error_bar = np.std(recall, ddof=1) / np.sqrt(len(recall))
+        print(
+            f"The recall at {k} is: {round(recall.sum()/len(recall) * 100, 1)} +/ {round(error_bar * 100, 1)}"
+        )
 
     for k, precision in precisions.items():
         print(
