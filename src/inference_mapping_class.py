@@ -55,7 +55,12 @@ def inference(
     model.train(False)
     # Create evaluator
     evaluator = InferenceEvaluatorPerOrgan(
-        ind2organ, organ2label, organ2voxels, voxelman_images_path, len(test_dataset)
+        ind2organ,
+        organ2label,
+        organ2voxels,
+        voxelman_images_path,
+        test_dataset.organ2count,
+        len(test_dataset),
     )
     with torch.no_grad():
         evaluator.reset_counters()
