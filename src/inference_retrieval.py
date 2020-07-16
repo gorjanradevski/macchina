@@ -73,7 +73,7 @@ def inference(
                 )
 
     recalls = {"1": [], "5": [], "10": []}
-    precisions = {"1": [], "5": [], "10": []}
+    precisions = {"1": 0, "5": 0, "10": 0}
     for document1 in tqdm(embedded_docs):
         cur_doc_distances = []
         for document2 in embedded_docs:
