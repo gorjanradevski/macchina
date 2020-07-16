@@ -144,6 +144,12 @@ def parse_args():
         help="Path to the test set",
     )
     parser.add_argument(
+        "--organs_dir_path",
+        type=str,
+        default="data/data_organs",
+        help="Path to the data organs directory path.",
+    )
+    parser.add_argument(
         "--model_name", type=str, default="reg_model", help="The model name."
     )
     parser.add_argument(
