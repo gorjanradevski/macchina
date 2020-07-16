@@ -1,4 +1,6 @@
 import argparse
+import json
+import os
 
 import numpy as np
 import torch
@@ -18,6 +20,7 @@ from voxel_mapping.retrieval_utils import EmbeddedDoc
 
 def inference(
     test_json_path: str,
+    organs_dir_path: str,
     model_name: str,
     batch_size: int,
     bert_name: str,
@@ -26,8 +29,11 @@ def inference(
 ):
     # Check for CUDA
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    ind2organ = json.load(open(os.path.join(organs_dir_path, "ind2organ.json")))
     tokenizer = BertTokenizer.from_pretrained(bert_name)
-    test_dataset = VoxelSentenceMappingTestRegDataset(test_json_path, tokenizer)
+    test_dataset = VoxelSentenceMappingTestRegDataset(
+        test_json_path, tokenizer, ind2organ
+    )
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
@@ -116,6 +122,7 @@ def main():
     args = parse_args()
     inference(
         args.test_json_path,
+        args.organs_dir_path,
         args.model_name,
         args.batch_size,
         args.bert_name,
