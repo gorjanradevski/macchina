@@ -64,8 +64,8 @@ def inference(
                     EmbeddedDoc(doc_id, organ_indices.numpy(), output_mapping.numpy())
                 )
 
-    recalls = {"1": 0, "5": 0, "10": 0}
-    precisions = {"1": 0, "5": 0, "10": 0}
+    recalls = {"1": [], "5": [], "10": []}
+    precisions = {"1": [], "5": [], "10": []}
     for document1 in tqdm(embedded_docs):
         cur_doc_distances = []
         for document2 in embedded_docs:
@@ -76,11 +76,16 @@ def inference(
             )
         cur_doc_distances_sorted = sorted(cur_doc_distances, key=lambda tup: tup[1])
         for k in recalls.keys():
+            correct = 0
             for cur_doc in cur_doc_distances_sorted[: int(k)]:
                 if cur_doc[0].shape == document1.organ_indices.shape:
                     if (cur_doc[0] == document1.organ_indices).all():
-                        recalls[k] += 1
+                        correct = 1
                         break
+            if correct:
+                recalls[k].append(1)
+            else:
+                recalls[k].append(0)
         for k in precisions.keys():
             cur_precision = 0
             for cur_doc in cur_doc_distances_sorted[: int(k)]:
@@ -91,7 +96,7 @@ def inference(
             precisions[k] += cur_precision
 
     for k, recall in recalls.items():
-        print(f"The recall at {k} is: {round(recall/len(embedded_docs) * 100, 1)}")
+        print(f"The recall at {k} is: {round(sum(recall)/len(recall) * 100, 1)} +/ {}")
 
     for k, precision in precisions.items():
         print(
