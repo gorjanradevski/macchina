@@ -15,7 +15,8 @@ from transformers import BertConfig, BertTokenizer
 from voxel_mapping.datasets import (
     VoxelSentenceMappingTrainClassDataset,
     VoxelSentenceMappingTestClassDataset,
-    collate_pad_sentence_class_batch,
+    collate_pad_sentence_class_train_batch,
+    collate_pad_sentence_class_test_batch,
 )
 from voxel_mapping.models import ClassModel
 from voxel_mapping.evaluator import TrainingEvaluator
@@ -53,16 +54,10 @@ def train(
     num_classes = max([int(index) for index in ind2organ.keys()]) + 1
     # Prepare datasets
     tokenizer = BertTokenizer.from_pretrained(bert_name)
-    logging.warning(f"The masking is set to: ---{masking}---")
-    logging.warning(
-        f"Usage of occurrences instead of ground truth is set to: ---{use_occurrences}---"
-    )
+    logging.warning(f"Usage of masking is set to: ---{masking}---")
+    logging.warning(f"Usage of occurences is set to: ---{use_occurrences}---")
     train_dataset = VoxelSentenceMappingTrainClassDataset(
-        train_json_path,
-        tokenizer,
-        num_classes,
-        masking=masking,
-        use_occurrences=use_occurrences,
+        train_json_path, tokenizer, num_classes, masking, use_occurrences
     )
     val_dataset = VoxelSentenceMappingTestClassDataset(
         val_json_path, tokenizer, num_classes
@@ -71,10 +66,12 @@ def train(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        collate_fn=collate_pad_sentence_class_batch,
+        collate_fn=collate_pad_sentence_class_train_batch,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, collate_fn=collate_pad_sentence_class_batch
+        val_dataset,
+        batch_size=batch_size,
+        collate_fn=collate_pad_sentence_class_test_batch,
     )
     config = BertConfig.from_pretrained(bert_name)
     # Prepare model
@@ -116,7 +113,7 @@ def train(
         # Set model in train mode
         model.train(True)
         with tqdm(total=len(train_loader)) as pbar:
-            for sentences, attn_mask, organ_indices, _ in train_loader:
+            for sentences, attn_mask, organ_indices in train_loader:
                 # remove past gradients
                 optimizer.zero_grad()
                 # forward

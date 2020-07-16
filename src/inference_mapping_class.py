@@ -12,7 +12,7 @@ from transformers import BertConfig, BertTokenizer
 
 from voxel_mapping.datasets import (
     VoxelSentenceMappingTestClassDataset,
-    collate_pad_sentence_class_batch,
+    collate_pad_sentence_class_test_batch,
 )
 from voxel_mapping.evaluator import InferenceEvaluatorPerOrgan
 from voxel_mapping.models import ClassModel
@@ -38,12 +38,15 @@ def inference(
     num_classes = max([int(index) for index in ind2organ.keys()]) + 1
     tokenizer = BertTokenizer.from_pretrained(bert_name)
     test_dataset = VoxelSentenceMappingTestClassDataset(
-        test_json_path, tokenizer, num_classes
+        test_json_path, tokenizer, ind2organ
     )
     test_loader = DataLoader(
-        test_dataset, batch_size=batch_size, collate_fn=collate_pad_sentence_class_batch
+        test_dataset,
+        batch_size=batch_size,
+        collate_fn=collate_pad_sentence_class_test_batch,
     )
     config = BertConfig.from_pretrained(bert_name)
+    num_classes = max([int(index) for index in ind2organ.keys()]) + 1
     model = nn.DataParallel(
         ClassModel(bert_name, config, final_project_size=num_classes)
     ).to(device)
@@ -87,7 +90,7 @@ def inference(
             f"{evaluator.get_current_miss_distance()} +/- {evaluator.get_miss_distance_error_bar()}"
         )
         print("============================================")
-        for organ_name in evaluator.organ_names:
+        for organ_name in evaluator.organ2count.keys():
             if evaluator.get_current_ior_for_organ(organ_name) > -1:
                 print(
                     f"The avg IOR for {organ_name} is: "

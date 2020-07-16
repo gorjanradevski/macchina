@@ -11,18 +11,12 @@ from utils.constants import VOXELMAN_CENTER
 
 
 class VoxelSentenceMappingRegDataset:
-    def __init__(self, json_path: str, tokenizer: str, use_occurrences: bool = False):
+    def __init__(self, json_path: str, tokenizer: str, ind2organ: Dict[int, str]):
         self.json_data = json.load(open(json_path))
         self.tokenizer = tokenizer
-        self.use_occurrences = use_occurrences
-        self.sentences, self.organ_indices = [], []
-        for element in tqdm(self.json_data):
-            self.sentences.append(element["text"])
-            if self.use_occurrences:
-                self.organ_indices.append(element["occ_organ_indices"])
-            else:
-                self.organ_indices.append(element["organ_indices"])
+        self.sentences = [element["text"] for element in tqdm(self.json_data)]
         self.center = torch.from_numpy(VOXELMAN_CENTER)
+        self.ind2organ = ind2organ
 
 
 class VoxelSentenceMappingTrainRegDataset(VoxelSentenceMappingRegDataset, Dataset):
@@ -33,16 +27,19 @@ class VoxelSentenceMappingTrainRegDataset(VoxelSentenceMappingRegDataset, Datase
         ind2organ: Dict[int, str],
         organ2voxels: str,
         num_anchors: int,
-        masking: bool = False,
-        use_occurrences: bool = False,
+        masking: bool,
+        use_occurences: bool,
     ):
-        super().__init__(json_path, tokenizer, use_occurrences)
+        super().__init__(json_path, tokenizer, ind2organ)
+        self.organ_indices = [
+            element["occ_organ_indices"] if use_occurences else element["organ_indices"]
+            for element in tqdm(self.json_data)
+        ]
+        self.keywords = [element["keywords"] for element in self.json_data]
         self.masking = masking
         self.detokenizer = TreebankWordDetokenizer()
         self.num_anchors = num_anchors
         self.organ2voxels = organ2voxels
-        self.ind2organ = ind2organ
-        self.keywords = [element["keywords"] for element in self.json_data]
 
     def __len__(self):
         return len(self.sentences)
@@ -79,9 +76,20 @@ class VoxelSentenceMappingTrainRegDataset(VoxelSentenceMappingRegDataset, Datase
 
 
 class VoxelSentenceMappingTestRegDataset(VoxelSentenceMappingRegDataset, Dataset):
-    def __init__(self, json_path: str, tokenizer: BertTokenizer):
-        super().__init__(json_path, tokenizer)
+    def __init__(
+        self, json_path: str, tokenizer: BertTokenizer, ind2organ: Dict[int, str]
+    ):
+        super().__init__(json_path, tokenizer, ind2organ)
+        self.organ_indices = [
+            element["organ_indices"] for element in tqdm(self.json_data)
+        ]
         self.ids = [element["pmid"] for element in self.json_data]
+        self.organ2count = {}
+        for indices_sublist in self.organ_indices:
+            for index in indices_sublist:
+                if self.ind2organ[str(index)] not in self.organ2count:
+                    self.organ2count[self.ind2organ[str(index)]] = 0
+                self.organ2count[self.ind2organ[str(index)]] += 1
 
     def __len__(self):
         return len(self.sentences)
@@ -129,26 +137,12 @@ def collate_pad_sentence_reg_test_batch(
 
 class VoxelSentenceMappingClassDataset:
     def __init__(
-        self,
-        json_path: str,
-        tokenizer: BertTokenizer,
-        num_classes: int,
-        use_occurrences: bool = False,
+        self, json_path: str, tokenizer: BertTokenizer, ind2organ: Dict[int, str]
     ):
         self.json_data = json.load(open(json_path))
-        self.sentences, self.organ_indices, self.organ_names, self.ids = [], [], [], []
-        self.num_classes = num_classes
-        self.use_occurrences = use_occurrences
+        self.sentences = [element["text"] for element in tqdm(self.json_data)]
+        self.num_classes = max([int(index) for index in ind2organ.keys()]) + 1
         self.tokenizer = tokenizer
-        for element in tqdm(self.json_data):
-            self.sentences.append(element["text"])
-            if self.use_occurrences:
-                self.organ_indices.append(element["occ_organ_indices"])
-                self.organ_names.append(element["occ_organ_names"])
-            else:
-                self.organ_indices.append(element["organ_indices"])
-                self.organ_names.append(element["organ_names"])
-            self.ids.append(element["pmid"])
 
 
 class VoxelSentenceMappingTrainClassDataset(VoxelSentenceMappingClassDataset, Dataset):
@@ -156,11 +150,16 @@ class VoxelSentenceMappingTrainClassDataset(VoxelSentenceMappingClassDataset, Da
         self,
         json_path: str,
         tokenizer: BertTokenizer,
-        num_classes: int,
+        ind2organ: Dict[int, str],
         masking: bool,
-        use_occurrences: bool = False,
+        use_occurences: bool,
     ):
-        super().__init__(json_path, tokenizer, num_classes, use_occurrences)
+        super().__init__(json_path, tokenizer, ind2organ)
+        self.keywords = [element["keywords"] for element in self.json_data]
+        self.organ_indices = [
+            element["occ_organ_indices"] if use_occurences else element["organ_indices"]
+            for element in tqdm(self.json_data)
+        ]
         self.masking = masking
         self.detokenizer = TreebankWordDetokenizer()
         self.keywords = [element["keywords"] for element in self.json_data]
@@ -186,14 +185,25 @@ class VoxelSentenceMappingTrainClassDataset(VoxelSentenceMappingClassDataset, Da
         organ_indices = torch.tensor(self.organ_indices[idx])
         one_hot = torch.zeros(self.num_classes)
         one_hot[organ_indices] = 1
-        doc_ids = self.ids[idx]
 
-        return tokenized_sentence, one_hot, doc_ids
+        return tokenized_sentence, one_hot
 
 
 class VoxelSentenceMappingTestClassDataset(VoxelSentenceMappingClassDataset, Dataset):
-    def __init__(self, json_path: str, tokenizer: BertTokenizer, num_classes: int):
-        super().__init__(json_path, tokenizer, num_classes)
+    def __init__(
+        self, json_path: str, tokenizer: BertTokenizer, ind2organ: Dict[int, str]
+    ):
+        super().__init__(json_path, tokenizer, ind2organ)
+        self.organ_indices = [
+            element["organ_indices"] for element in tqdm(self.json_data)
+        ]
+        self.ids = [element["pmid"] for element in self.json_data]
+        self.organ2count = {}
+        for indices_sublist in self.organ_indices:
+            for index in indices_sublist:
+                if self.ind2organ[str(index)] not in self.organ2count:
+                    self.organ2count[self.ind2organ[str(index)]] = 0
+                self.organ2count[self.ind2organ[str(index)]] += 1
 
     def __len__(self):
         return len(self.sentences)
@@ -210,7 +220,18 @@ class VoxelSentenceMappingTestClassDataset(VoxelSentenceMappingClassDataset, Dat
         return tokenized_sentence, one_hot, doc_ids
 
 
-def collate_pad_sentence_class_batch(
+def collate_pad_sentence_class_train_batch(
+    batch: Tuple[torch.Tensor, torch.Tensor, List[int]]
+):
+    sentences, organ_indices = zip(*batch)
+    padded_sentences = torch.nn.utils.rnn.pad_sequence(sentences, batch_first=True)
+    attn_mask = padded_sentences.clone()
+    attn_mask[torch.where(attn_mask > 0)] = 1
+
+    return padded_sentences, attn_mask, torch.stack([*organ_indices], dim=0)
+
+
+def collate_pad_sentence_class_test_batch(
     batch: Tuple[torch.Tensor, torch.Tensor, List[int]]
 ):
     sentences, organ_indices, docs_ids = zip(*batch)
