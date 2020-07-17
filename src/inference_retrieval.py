@@ -107,7 +107,7 @@ def inference(
         recall = np.array(recall)
         error_bar = np.std(recall, ddof=1) / np.sqrt(len(recall))
         print(
-            f"The recall at {k} is: {round(recall.sum()/len(recall) * 100, 1)} +/ {round(error_bar * 100, 1)}"
+            f"The recall at {k} is: {round(recall.sum()/len(recall) * 100, 1)} +/- {round(error_bar * 100, 1)}"
         )
 
     for k, precision in precisions.items():
