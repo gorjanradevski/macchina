@@ -327,11 +327,6 @@ def parse_args():
         help="Whether to use organ occurrences as labels instead of ground truth.",
     )
     parser.add_argument(
-        "--use_occurrences",
-        action="store_true",
-        help="Whether to use organ occurences as training.",
-    )
-    parser.add_argument(
         "--bert_name",
         type=str,
         default="bert-base-uncased",
