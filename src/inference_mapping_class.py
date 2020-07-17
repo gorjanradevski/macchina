@@ -114,6 +114,9 @@ def inference(
                 )
                 print("============================================")
 
+        np.save(open("cls_corrects.npy", "wb"), evaluator.corrects)
+        np.save(open("cls_distances.npy", "wb"), evaluator.distances)
+
 
 def main():
     # Without the main sentinel, the code would be executed even if the script were

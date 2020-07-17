@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 
+import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -101,6 +102,9 @@ def inference(
                     f"{evaluator.get_miss_distance_error_bar_for_organ(organ_name)}"
                 )
                 print("============================================")
+
+        np.save(open("reg_corrects.npy", "wb"), evaluator.corrects)
+        np.save(open("reg_distances.npy", "wb"), evaluator.distances)
 
 
 def main():
