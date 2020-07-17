@@ -69,7 +69,9 @@ def train(
         masking=masking,
         use_occurences=use_occurrences,
     )
-    val_dataset = VoxelSentenceMappingTestRegDataset(val_json_path, tokenizer)
+    val_dataset = VoxelSentenceMappingTestRegDataset(
+        val_json_path, tokenizer, ind2organ
+    )
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
