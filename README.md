@@ -1,6 +1,6 @@
 # Self-supervised context-aware Covid-19 document exploration through atlas grounding
 
-This repository is the official implementation of [Self-supervised context-aware Covid-19 document exploration through atlas grounding](https://openreview.net/forum?id=EC1vWkJXpjy) authored by Dusan Grujicic<sup>*</sup>, [Gorjan Radevski<sup>*</sup>](http://gorjanradevski.github.io/), [Tinne Tuytelaars](https://homes.esat.kuleuven.be/~tuytelaa/), [Matthew Blaschko](https://homes.esat.kuleuven.be/~mblaschk/). The work is currently under review at [NLP COVID-19 Workshop](https://www.nlpcovid19workshop.org/) at ACL 2020.
+This repository is the official implementation of [Self-supervised context-aware Covid-19 document exploration through atlas grounding](https://openreview.net/forum?id=EC1vWkJXpjy) authored by Dusan Grujicic<sup>*</sup>, [Gorjan Radevski<sup>*</sup>](http://gorjanradevski.github.io/), [Tinne Tuytelaars](https://homes.esat.kuleuven.be/~tuytelaa/), [Matthew Blaschko](https://homes.esat.kuleuven.be/~mblaschk/). [NLP COVID-19 Workshop](https://www.nlpcovid19workshop.org/) at ACL 2020.
 
 See our [Cord-19 Explorer](https://cord19-explorer.herokuapp.com/) and our [Cord-19 Visualizer](https://github.com/dusangrujicic/cord19-visualizer) tools.
 
@@ -105,7 +105,17 @@ gdown "https://drive.google.com/uc?id=11OHi9wETRPAHUTIH4p6BqZY3gH6NJtve" -O mode
 If you found this code useful, or use some of our resources for your work, we will appreciate if you cite our paper.
 
 ```tex
-BibTeX entry should go here.
+@inproceedings{author-covid-20,
+    title={ Self-supervised context-aware Covid-19 document exploration throughatlas grounding },
+    author={Dusan Grujicic and Gorjan Radevski and Tinne Tuytelaars and Matthew Blaschko},
+    year={2020},
+    booktitle={Proceedings of the 1st Workshop on {NLP} for {COVID-19} at {ACL 2020}},
+    month = jul,
+    volume = 1,
+    address = {Online},
+    publisher = {Association for Computational Linguistics},
+    abstract = {In this paper, we aim to develop a self-supervised grounding of Covid-related medical text based on the actual spatial relationships between the referred anatomical concepts. More specifically, we learn to project sentences into a physical space defined by a three-dimensional anatomical atlas, allowing for a visual approach to navigating Covid-related literature. We design a straightforward and empirically effective training objective to reduce the curated data dependency issue. We use BERT as the main building block of our model and perform a quantitative analysis that demonstrates that the model learns a context-aware mapping. We illustrate two potential use-cases for our approach, one in interactive, 3D data exploration, and the other in document retrieval. To accelerate research in this direction, we make public all trained models, codebase and the developed tools, which can be accessed at https://github.com/gorjanradevski/macchina/.},
+}
 ```
 
 ## License
