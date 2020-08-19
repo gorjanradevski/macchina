@@ -105,8 +105,8 @@ gdown "https://drive.google.com/uc?id=11OHi9wETRPAHUTIH4p6BqZY3gH6NJtve" -O mode
 If you found this code useful, or use some of our resources for your work, we will appreciate if you cite our paper.
 
 ```tex
-@inproceedings{author-covid-20,
-    title={ Self-supervised context-aware Covid-19 document exploration throughatlas grounding },
+@inproceedings{grujicic-radevski-covid-20,
+    title={ Self-supervised context-aware Covid-19 document exploration through atlas grounding },
     author={Dusan Grujicic and Gorjan Radevski and Tinne Tuytelaars and Matthew Blaschko},
     year={2020},
     booktitle={Proceedings of the 1st Workshop on {NLP} for {COVID-19} at {ACL 2020}},
