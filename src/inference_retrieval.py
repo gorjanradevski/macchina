@@ -7,6 +7,9 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import os
+import json
+import numpy as np
 from transformers import BertConfig, BertTokenizer
 
 from utils.constants import VOXELMAN_CENTER
@@ -31,6 +34,7 @@ def inference(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ind2organ = json.load(open(os.path.join(organs_dir_path, "ind2organ.json")))
     tokenizer = BertTokenizer.from_pretrained(bert_name)
+    ind2organ = json.load(open(os.path.join(organs_dir_path, "ind2organ.json")))
     test_dataset = VoxelSentenceMappingTestRegDataset(
         test_json_path, tokenizer, ind2organ
     )
@@ -72,8 +76,12 @@ def inference(
                     EmbeddedDoc(doc_id, organ_indices.numpy(), output_mapping.numpy())
                 )
 
-    recalls = {"1": [], "5": [], "10": []}
-    precisions = {"1": 0, "5": 0, "10": 0}
+    recalls = {
+        "1": np.zeros(len(test_dataset)),
+        "5": np.zeros(len(test_dataset)),
+        "10": np.zeros(len(test_dataset)),
+    }
+    index = 0
     for document1 in tqdm(embedded_docs):
         cur_doc_distances = []
         for document2 in embedded_docs:
@@ -88,37 +96,20 @@ def inference(
             for cur_doc in cur_doc_distances_sorted[: int(k)]:
                 if cur_doc[0].shape == document1.organ_indices.shape:
                     if (cur_doc[0] == document1.organ_indices).all():
-                        correct = 1
+                        recalls[k][index] += 1
                         break
-            if correct:
-                recalls[k].append(1)
-            else:
-                recalls[k].append(0)
-        for k in precisions.keys():
-            cur_precision = 0
-            for cur_doc in cur_doc_distances_sorted[: int(k)]:
-                if cur_doc[0].shape == document1.organ_indices.shape:
-                    if (cur_doc[0] == document1.organ_indices).all():
-                        cur_precision += 1
-            cur_precision /= int(k)
-            precisions[k] += cur_precision
+        index += 1
 
     for k, recall in recalls.items():
-        recall = np.array(recall)
         error_bar = np.std(recall, ddof=1) / np.sqrt(len(recall))
         print(
-            f"The recall at {k} is: {round(recall.sum()/len(recall) * 100, 1)} +/- {round(error_bar * 100, 1)}"
-        )
-
-    for k, precision in precisions.items():
-        print(
-            f"The precision at {k} is: {round(precision/len(embedded_docs) * 100, 1)}"
+            f"The recall at {k} is: "
+            f"{np.round(recall.sum()/recall.shape[0] * 100, decimals=1)} "
+            f"+/- {np.round(error_bar * 100, decimals=1)}"
         )
 
 
 def main():
-    # Without the main sentinel, the code would be executed even if the script were
-    # imported as a module.
     args = parse_args()
     inference(
         args.test_json_path,
@@ -140,17 +131,15 @@ def parse_args():
     parser.add_argument(
         "--test_json_path",
         type=str,
-        default="data/dataset_text_atlas_mapping_test_fixd.json",
         help="Path to the test set",
     )
     parser.add_argument(
         "--organs_dir_path",
         type=str,
-        default="data/data_organs",
         help="Path to the data organs directory path.",
     )
     parser.add_argument(
-        "--model_name", type=str, default="reg_model", help="The model name."
+        "--model_name", type=str, default="reg_model", help="The model name.",
     )
     parser.add_argument(
         "--batch_size", type=int, default=64, help="The size of the batch."
