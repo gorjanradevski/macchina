@@ -30,9 +30,11 @@ def create_all_mesh_dataset(
         src_dset_path (str): Path to the source dataset.
         dst_dset_path (str): Path under which the dataset is saved.
         organs_dir_path (str): Path to the directory with organ dictionaries.
-        organ_cap (int): Maximum number of organ occurrences in dataset subset.
+        organ_cap_single (int): Maximum number of organ occurrences in aggregated samples with single organs.
+        organ_cap_multi (int): Maximum number of organ occurrences in aggregated samples with multiple organs.
         train_percentage (float): Percentage of training set samples.
         generate_maskwords (bool): Whether to recalculate keywords.
+        take_short (bool): Whether to only keep samples with abstracts shorter than 512.
     """
 
     if not os.path.exists(os.path.dirname(dst_dset_path)):
