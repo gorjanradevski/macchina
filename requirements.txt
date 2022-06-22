@@ -48,7 +48,7 @@ nbformat==4.4.0
 ndjson==0.2.0
 nltk==3.4.5
 notebook==6.0.2
-numpy==1.17.4
+numpy==1.22.0
 packaging==19.2
 pandocfilters==1.4.2
 parso==0.5.1
